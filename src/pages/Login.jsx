@@ -154,11 +154,12 @@ export default function Login() {
 
         {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.4px', marginBottom: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.4px', marginBottom: 10 }}>
             EcoFin
           </h1>
+          <img src="/logo-xul.png" alt="XUL" style={{ display: 'block', margin: '0 auto 10px', width: 160, filter: 'invert(1) brightness(1.1)', opacity: 0.9 }} />
           <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
-            Análisis Financiero&nbsp;·&nbsp;XUL
+            Control Económico
           </p>
         </div>
 
