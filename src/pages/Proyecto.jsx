@@ -1,0 +1,365 @@
+import { useState, useMemo, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { ArrowLeft, Save, Edit2, Check, X, Trash2 } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Legend,
+} from 'recharts'
+import { useData } from '../context/DataContext'
+
+const MESES     = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
+const MESES_SHORT = ['E','F','M','A','M','J','J','A','S','O','N','D']
+
+const CATS = [
+  { key: 'facturacion',     label: 'Facturación',     color: '#10B981' },
+  { key: 'coste_personal',  label: 'Coste Personal',  color: '#7C4DFF' },
+  { key: 'gastos_personal', label: 'Gastos Personal', color: '#6366F1' },
+  { key: 'produccion',      label: 'Producción',      color: '#F59E0B' },
+  { key: 'plan_medios',     label: 'Plan de Medios',  color: '#EF4444' },
+]
+
+const ESTADO_MAP = {
+  activo:    { label: 'Activo',    bg: '#10B98118', color: '#10B981' },
+  preparado: { label: 'Preparado', bg: '#F59E0B18', color: '#F59E0B' },
+  cerrado:   { label: 'Cerrado',   bg: '#6B728018', color: '#6B7280' },
+}
+
+function fmt(n) {
+  if (!n || isNaN(n)) return '—'
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+}
+
+function fmtK(n) {
+  if (!n || isNaN(n)) return '0'
+  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(Math.round(n))
+}
+
+export default function Proyecto() {
+  const { id }     = useParams()
+  const navigate   = useNavigate()
+  const { proyectos, getEntradasProyecto, updateProyecto, deleteProyecto, saveEntradas } = useData()
+
+  const proyecto = proyectos.find(p => p.id === id)
+
+  // Build grid from stored entradas
+  const storedEntradas = getEntradasProyecto(id, proyecto?.anio)
+  const initGrid = () => {
+    const g = {}
+    CATS.forEach(c => { for (let m = 1; m <= 12; m++) g[`${c.key}-${m}`] = 0 })
+    storedEntradas.forEach(e => { g[`${e.categoria}-${e.mes}`] = Number(e.importe) })
+    return g
+  }
+
+  const [grid, setGrid]           = useState(initGrid)
+  const [dirty, setDirty]         = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [editHeader, setEditHeader] = useState(false)
+  const [headerForm, setHeaderForm] = useState(proyecto ? { ...proyecto } : {})
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [chartView, setChartView] = useState('mensual')
+
+  useEffect(() => {
+    if (!proyecto) return
+    const g = {}
+    CATS.forEach(c => { for (let m = 1; m <= 12; m++) g[`${c.key}-${m}`] = 0 })
+    getEntradasProyecto(id, proyecto.anio).forEach(e => { g[`${e.categoria}-${e.mes}`] = Number(e.importe) })
+    setGrid(g)
+    setDirty(false)
+    setEditHeader(false)
+    setHeaderForm({ ...proyecto })
+    setConfirmDelete(false)
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!proyecto) return (
+    <div style={{ padding: 48, textAlign: 'center' }}>
+      <p style={{ color: 'var(--c-text-3)', marginBottom: 12 }}>Proyecto no encontrado</p>
+      <button onClick={() => navigate('/proyectos')} style={{ padding: '8px 18px', borderRadius: 8, background: '#F59E0B', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Volver</button>
+    </div>
+  )
+
+  function getVal(cat, mes) { return grid[`${cat}-${mes}`] || 0 }
+  function setVal(cat, mes, raw) {
+    const importe = parseFloat(String(raw).replace(',', '.')) || 0
+    setGrid(g => ({ ...g, [`${cat}-${mes}`]: importe }))
+    setDirty(true)
+  }
+  function rowTotal(cat) { return MESES.reduce((a, _, i) => a + getVal(cat, i + 1), 0) }
+
+  const facturacion     = rowTotal('facturacion')
+  const coste_personal  = rowTotal('coste_personal')
+  const gastos_personal = rowTotal('gastos_personal')
+  const produccion      = rowTotal('produccion')
+  const plan_medios     = rowTotal('plan_medios')
+  const beneficio       = facturacion - coste_personal - gastos_personal - produccion - plan_medios
+  const presupuesto     = Number(headerForm.presupuesto_base || 0) + Number(headerForm.ampliaciones || 0)
+
+  async function handleSave() {
+    setSaving(true)
+    await saveEntradas(id, proyecto.anio, grid)
+    setSaving(false)
+    setDirty(false)
+  }
+
+  async function handleSaveHeader() {
+    const patch = {
+      nombre_contrato: headerForm.nombre_contrato,
+      cliente: headerForm.cliente,
+      codigo_proyecto: headerForm.codigo_proyecto,
+      codigo_contrato: headerForm.codigo_contrato || null,
+      presupuesto_base: Number(headerForm.presupuesto_base) || 0,
+      ampliaciones: Number(headerForm.ampliaciones) || 0,
+      estado: headerForm.estado,
+    }
+    await updateProyecto(id, patch)
+    setEditHeader(false)
+  }
+
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); setTimeout(() => setConfirmDelete(false), 4000); return }
+    await deleteProyecto(id)
+    navigate('/proyectos')
+  }
+
+  // Chart data
+  const chartData = useMemo(() => {
+    let acFact = 0, acBen = 0
+    return MESES.map((m, i) => {
+      const mes  = i + 1
+      const fact = getVal('facturacion', mes)
+      const cp   = getVal('coste_personal', mes)
+      const gp   = getVal('gastos_personal', mes)
+      const prod = getVal('produccion', mes)
+      const pm   = getVal('plan_medios', mes)
+      const ben  = fact - cp - gp - prod - pm
+      acFact += fact
+      acBen  += ben
+      return { mes: MESES_SHORT[i], facturacion: fact, coste: cp + gp, produccion: prod, plan_medios: pm, beneficio: ben, acFact, acBen }
+    }).filter(d => d.facturacion > 0 || d.coste > 0 || d.produccion > 0 || d.plan_medios > 0)
+  }, [grid])
+
+  const badge = ESTADO_MAP[proyecto.estado] || ESTADO_MAP.activo
+
+  const kpiCards = [
+    { label: 'Presupuesto',    value: fmt(presupuesto),    color: '#7C4DFF' },
+    { label: 'Facturación',    value: fmt(facturacion),    sub: presupuesto ? `${((facturacion / presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
+    { label: 'Coste Personal', value: fmt(coste_personal), sub: facturacion ? `${((coste_personal / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#7C4DFF' },
+    { label: 'Producción',     value: fmt(produccion),     sub: facturacion ? `${((produccion / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
+    { label: 'Plan Medios',    value: fmt(plan_medios),    sub: facturacion ? `${((plan_medios / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#EF4444' },
+    { label: 'Beneficio',      value: fmt(beneficio),      sub: facturacion ? `${((beneficio / facturacion) * 100).toFixed(1)}% ganancia` : null, color: beneficio >= 0 ? '#10B981' : '#EF4444' },
+  ]
+
+  return (
+    <div style={{ padding: '28px 32px', minHeight: '100%' }}>
+      {/* Back */}
+      <button onClick={() => navigate('/proyectos')} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-3)', fontSize: 13, padding: 0, marginBottom: 16 }}>
+        <ArrowLeft size={14} /> Volver a proyectos
+      </button>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
+        {!editHeader ? (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.3px' }}>{headerForm.nombre_contrato}</h1>
+              <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span>
+              <button onClick={() => setEditHeader(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', padding: 2 }}><Edit2 size={13} /></button>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--c-text-3)' }}>
+              <span className="font-numeric" style={{ fontWeight: 700, color: '#F59E0B' }}>{headerForm.codigo_proyecto}</span>
+              {headerForm.codigo_contrato && <span> · {headerForm.codigo_contrato}</span>}
+              <span> · {headerForm.cliente} · {proyecto.anio}</span>
+            </p>
+          </div>
+        ) : (
+          <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 12, padding: 20, flex: 1, maxWidth: 600 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--c-text-3)', marginBottom: 14 }}>Editar proyecto</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {[['Nombre contrato', 'nombre_contrato'], ['Cliente', 'cliente'], ['Código proyecto', 'codigo_proyecto'], ['Código contrato', 'codigo_contrato']].map(([label, key]) => (
+                <label key={key} style={{ display: 'block' }}>
+                  <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>{label}</span>
+                  <input value={headerForm[key] || ''} onChange={e => setHeaderForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, boxSizing: 'border-box' }} />
+                </label>
+              ))}
+              <label>
+                <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>Presupuesto base (€)</span>
+                <input type="number" value={headerForm.presupuesto_base || ''} onChange={e => setHeaderForm(f => ({ ...f, presupuesto_base: e.target.value }))}
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, boxSizing: 'border-box', fontFamily: 'Space Grotesk, sans-serif' }} />
+              </label>
+              <label>
+                <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>Ampliaciones (€)</span>
+                <input type="number" value={headerForm.ampliaciones || ''} onChange={e => setHeaderForm(f => ({ ...f, ampliaciones: e.target.value }))}
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, boxSizing: 'border-box', fontFamily: 'Space Grotesk, sans-serif' }} />
+              </label>
+              <div style={{ gridColumn: '1/-1' }}>
+                <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 6 }}>Estado</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {[['activo','Activo'],['preparado','Preparado'],['cerrado','Cerrado']].map(([v, l]) => (
+                    <button key={v} type="button" onClick={() => setHeaderForm(f => ({ ...f, estado: v }))}
+                      style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${headerForm.estado === v ? '#F59E0B' : 'var(--c-border)'}`, background: headerForm.estado === v ? '#F59E0B18' : 'transparent', color: headerForm.estado === v ? '#F59E0B' : 'var(--c-text-2)' }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={handleSaveHeader} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 16px', borderRadius: 7, background: '#10B981', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><Check size={13} /> Guardar</button>
+              <button onClick={() => { setHeaderForm({ ...proyecto }); setEditHeader(false) }} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 7, background: 'var(--c-bg-muted)', color: 'var(--c-text-2)', border: '1.5px solid var(--c-border)', cursor: 'pointer', fontSize: 13 }}><X size={13} /> Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button onClick={handleDelete}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 14px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: confirmDelete ? '#EF444418' : 'var(--c-bg-muted)', color: confirmDelete ? '#EF4444' : 'var(--c-text-3)', border: `1.5px solid ${confirmDelete ? '#EF444450' : 'var(--c-border)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
+            <Trash2 size={14} /> {confirmDelete ? 'Confirmar' : 'Eliminar'}
+          </button>
+          <button onClick={handleSave} disabled={!dirty || saving}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: dirty ? 'linear-gradient(135deg,#F59E0B,#EF4444)' : 'var(--c-bg-muted)', color: dirty ? '#fff' : 'var(--c-text-4)', border: 'none', cursor: dirty ? 'pointer' : 'default', boxShadow: dirty ? '0 2px 10px rgba(245,158,11,0.35)' : 'none', transition: 'all 0.2s' }}>
+            <Save size={15} /> {saving ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Sin cambios'}
+          </button>
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 24 }}>
+        {kpiCards.map(c => (
+          <div key={c.label} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 10, padding: '14px 16px' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--c-text-3)', marginBottom: 5 }}>{c.label}</p>
+            <p className="font-numeric" style={{ fontSize: 17, fontWeight: 700, color: c.color, letterSpacing: '-0.4px', marginBottom: c.sub ? 3 : 0 }}>{c.value}</p>
+            {c.sub && <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{c.sub}</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      {chartData.length > 0 && (
+        <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Evolución mensual</p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[['mensual','Mensual'],['acumulado','Acumulado']].map(([v, l]) => (
+                <button key={v} onClick={() => setChartView(v)}
+                  style={{ padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${chartView === v ? '#F59E0B' : 'var(--c-border)'}`, background: chartView === v ? '#F59E0B18' : 'transparent', color: chartView === v ? '#F59E0B' : 'var(--c-text-3)' }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={220}>
+            {chartView === 'mensual' ? (
+              <BarChart data={chartData} barCategoryGap="25%" barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
+                <Tooltip formatter={(v, n) => [new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v), n]} labelStyle={{ fontWeight: 700, color: 'var(--c-text-1)' }} contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="coste"       name="Coste Personal" fill="#7C4DFF" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="produccion"  name="Producción" fill="#F59E0B" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="beneficio"   name="Beneficio" fill="#06B6D4" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            ) : (
+              <BarChart data={chartData} barCategoryGap="30%">
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
+                <Tooltip formatter={(v, n) => [new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v), n]} labelStyle={{ fontWeight: 700 }} contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+                <Bar dataKey="acFact" name="Facturación acum." fill="#10B981" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="acBen"  name="Beneficio acum." fill="#06B6D4" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Monthly grid */}
+      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Datos mensuales · {proyecto.anio}</p>
+          {dirty && <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B' }}>● Cambios sin guardar</span>}
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: 'var(--c-bg-muted)' }}>
+                <th style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 130, position: 'sticky', left: 0, background: 'var(--c-bg-muted)', zIndex: 2 }}>Categoría</th>
+                {MESES.map(m => <th key={m} style={{ padding: '9px 6px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 78 }}>{m}</th>)}
+                <th style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 100, borderLeft: '1px solid var(--c-border)' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CATS.map((cat, ci) => {
+                const total = rowTotal(cat.key)
+                return (
+                  <tr key={cat.key} style={{ borderBottom: '1px solid var(--c-border-light)', background: ci % 2 !== 0 ? 'var(--c-bg-muted)' : 'transparent' }}>
+                    <td style={{ padding: '9px 14px', position: 'sticky', left: 0, background: ci % 2 !== 0 ? 'var(--c-bg-muted)' : 'var(--c-bg-surface)', zIndex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 600, color: 'var(--c-text-1)', fontSize: 12 }}>{cat.label}</span>
+                      </div>
+                    </td>
+                    {MESES.map((_, mi) => {
+                      const mes = mi + 1
+                      const val = getVal(cat.key, mes)
+                      return (
+                        <td key={mes} style={{ padding: '5px 4px', textAlign: 'center' }}>
+                          <CellInput value={val} color={cat.color} onChange={v => setVal(cat.key, mes, v)} />
+                        </td>
+                      )
+                    })}
+                    <td className="font-numeric" style={{ padding: '9px 14px', textAlign: 'right', fontWeight: 700, color: total > 0 ? cat.color : 'var(--c-text-4)', borderLeft: '1px solid var(--c-border)' }}>
+                      {total > 0 ? total.toLocaleString('es-ES', { maximumFractionDigits: 0 }) : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--c-bg-muted)', borderTop: '2px solid var(--c-border)' }}>
+                <td style={{ padding: '11px 14px', fontWeight: 700, fontSize: 12, color: 'var(--c-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', position: 'sticky', left: 0, background: 'var(--c-bg-muted)' }}>Beneficio</td>
+                {MESES.map((_, mi) => {
+                  const mes = mi + 1
+                  const b = getVal('facturacion', mes) - getVal('coste_personal', mes) - getVal('gastos_personal', mes) - getVal('produccion', mes) - getVal('plan_medios', mes)
+                  return (
+                    <td key={mes} className="font-numeric" style={{ padding: '11px 4px', textAlign: 'center', fontWeight: 700, fontSize: 12, color: b > 0 ? '#10B981' : b < 0 ? '#EF4444' : 'var(--c-text-4)' }}>
+                      {b !== 0 ? b.toLocaleString('es-ES', { maximumFractionDigits: 0 }) : '—'}
+                    </td>
+                  )
+                })}
+                <td className="font-numeric" style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, fontSize: 14, color: beneficio >= 0 ? '#10B981' : '#EF4444', borderLeft: '1px solid var(--c-border)' }}>
+                  {beneficio.toLocaleString('es-ES', { maximumFractionDigits: 0 })}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CellInput({ value, color, onChange }) {
+  const [focused, setFocused] = useState(false)
+  const [local, setLocal]     = useState('')
+
+  return (
+    <input
+      type="text" inputMode="decimal"
+      value={focused ? local : (value === 0 ? '' : value.toLocaleString('es-ES', { maximumFractionDigits: 0 }))}
+      placeholder="—"
+      onFocus={() => { setFocused(true); setLocal(value === 0 ? '' : String(value)) }}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { setFocused(false); onChange(local || '0') }}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      style={{
+        width: 72, padding: '5px 6px', textAlign: 'right', fontSize: 12,
+        border: focused ? `1.5px solid ${color}` : '1.5px solid transparent',
+        borderRadius: 6, background: focused ? `${color}12` : 'transparent',
+        color: value > 0 ? 'var(--c-text-1)' : 'var(--c-text-4)',
+        fontFamily: 'Space Grotesk, sans-serif', outline: 'none',
+        transition: 'all 0.12s', cursor: 'text', boxSizing: 'border-box',
+      }}
+      onMouseEnter={e => { if (!focused) e.target.style.border = `1.5px solid ${color}50` }}
+      onMouseLeave={e => { if (!focused) e.target.style.border = '1.5px solid transparent' }}
+    />
+  )
+}
