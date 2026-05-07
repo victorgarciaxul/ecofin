@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
-const DEMO_EMAIL = 'tech@xul.es'
+const DEMO_EMAIL = 'pruebas@xul.es'
 const DEMO_PASS  = 'Xul14$'
 const DEMO_USER  = { id: 'demo', email: DEMO_EMAIL, user_metadata: { full_name: 'Demo Manager' } }
 
