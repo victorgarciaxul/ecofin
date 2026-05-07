@@ -39,6 +39,22 @@ body {
   to { transform: rotate(360deg); }
 }
 
+@keyframes barPulse {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.5; }
+  50%       { transform: scaleY(1);    opacity: 1;   }
+}
+
+@keyframes floatFade {
+  0%        { opacity: 0;    transform: translateY(8px);  }
+  30%, 70%  { opacity: 0.35;                              }
+  100%      { opacity: 0;    transform: translateY(-14px);}
+}
+
+@keyframes pulseRing {
+  0%, 100% { opacity: 0.06; }
+  50%      { opacity: 0.13; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
