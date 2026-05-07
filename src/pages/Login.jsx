@@ -34,9 +34,18 @@ export default function Login() {
 
   async function submit(e) {
     e.preventDefault()
-    if (isDemo) { navigate('/dashboard', { replace: true }); return }
     setLoading(true)
     setError('')
+    if (isDemo) {
+      await new Promise(r => setTimeout(r, 600)) // small delay for feel
+      if (email === 'tech@xul.es' && password === 'Xul14$') {
+        navigate('/dashboard', { replace: true })
+      } else {
+        setError('Credenciales incorrectas.')
+        setLoading(false)
+      }
+      return
+    }
     const { error } = await signIn(email, password)
     if (error) { setError(error.message); setLoading(false) }
     else navigate('/dashboard', { replace: true })
@@ -168,53 +177,43 @@ export default function Login() {
           Bienvenido/a. Introduce tus credenciales.
         </p>
 
-        {/* Demo badge */}
-        {isDemo && (
-          <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: '#F59E0B', fontWeight: 600 }}>Modo demo activo · datos del Excel cargados</p>
-          </div>
-        )}
-
         {/* Form */}
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {!isDemo && (
-            <>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 7 }}>
-                  Usuario
-                </label>
-                <input
-                  type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                  placeholder="correo@empresa.com"
-                  style={{
-                    width: '100%', padding: '10px 13px', borderRadius: 9,
-                    border: 'none', outline: 'none', boxSizing: 'border-box',
-                    background: '#ffffff', color: '#0f0f1a',
-                    fontSize: 13, fontFamily: 'Poppins, sans-serif',
-                  }}
-                  onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
-                  onBlur={e => e.target.style.boxShadow = 'none'}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 7 }}>
-                  Contraseña
-                </label>
-                <input
-                  type="password" value={password} onChange={e => setPassword(e.target.value)} required
-                  placeholder="••••••••••••"
-                  style={{
-                    width: '100%', padding: '10px 13px', borderRadius: 9,
-                    border: 'none', outline: 'none', boxSizing: 'border-box',
-                    background: '#ffffff', color: '#0f0f1a',
-                    fontSize: 13, fontFamily: 'Poppins, sans-serif',
-                  }}
-                  onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
-                  onBlur={e => e.target.style.boxShadow = 'none'}
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 7 }}>
+              Usuario
+            </label>
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              placeholder="correo@empresa.com"
+              style={{
+                width: '100%', padding: '10px 13px', borderRadius: 9,
+                border: 'none', outline: 'none', boxSizing: 'border-box',
+                background: '#ffffff', color: '#0f0f1a',
+                fontSize: 13, fontFamily: 'Poppins, sans-serif',
+              }}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 7 }}>
+              Contraseña
+            </label>
+            <input
+              type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              placeholder="••••••••••••"
+              style={{
+                width: '100%', padding: '10px 13px', borderRadius: 9,
+                border: 'none', outline: 'none', boxSizing: 'border-box',
+                background: '#ffffff', color: '#0f0f1a',
+                fontSize: 13, fontFamily: 'Poppins, sans-serif',
+              }}
+              onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
+              onBlur={e => e.target.style.boxShadow = 'none'}
+            />
+          </div>
 
           {error && (
             <p style={{ fontSize: 12, color: '#EF4444', padding: '8px 12px', background: 'rgba(239,68,68,0.12)', borderRadius: 7, border: '1px solid rgba(239,68,68,0.25)' }}>
@@ -225,7 +224,7 @@ export default function Login() {
           <button
             type="submit" disabled={loading}
             style={{
-              marginTop: isDemo ? 0 : 6, padding: '12px', borderRadius: 9, border: 'none',
+              marginTop: 6, padding: '12px', borderRadius: 9, border: 'none',
               background: loading ? 'rgba(245,158,11,0.5)' : 'linear-gradient(135deg,#F59E0B,#EF4444)',
               color: '#fff', fontSize: 14, fontWeight: 700,
               cursor: loading ? 'wait' : 'pointer',
