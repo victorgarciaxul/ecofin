@@ -26,7 +26,7 @@ export default function Sidebar() {
     }}>
       {/* Logo */}
       <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 10,
             background: 'linear-gradient(135deg,#F59E0B,#EF4444)',
@@ -40,6 +40,7 @@ export default function Sidebar() {
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Control Económico</span>
           </div>
         </div>
+        <img src="/logo-xul.png" alt="XUL" style={{ width: '100%', maxWidth: 150, display: 'block', filter: 'invert(1) brightness(1.1)', opacity: 0.75 }} />
       </div>
 
       {/* Nav */}
