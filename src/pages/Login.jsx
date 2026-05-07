@@ -45,7 +45,7 @@ export default function Login() {
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: '#07070f', position: 'relative', overflow: 'hidden',
-      fontFamily: 'Poppins, sans-serif',
+      fontFamily: 'Product Sans, sans-serif',
     }}>
 
       {/* ── Animated background ─────────────────────────────────────────── */}
@@ -180,7 +180,7 @@ export default function Login() {
                 width: '100%', padding: '10px 13px', borderRadius: 9,
                 border: 'none', outline: 'none', boxSizing: 'border-box',
                 background: '#ffffff', color: '#0f0f1a',
-                fontSize: 13, fontFamily: 'Poppins, sans-serif',
+                fontSize: 13, fontFamily: 'Product Sans, sans-serif',
               }}
               onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
               onBlur={e => e.target.style.boxShadow = 'none'}
@@ -198,7 +198,7 @@ export default function Login() {
                 width: '100%', padding: '10px 13px', borderRadius: 9,
                 border: 'none', outline: 'none', boxSizing: 'border-box',
                 background: '#ffffff', color: '#0f0f1a',
-                fontSize: 13, fontFamily: 'Poppins, sans-serif',
+                fontSize: 13, fontFamily: 'Product Sans, sans-serif',
               }}
               onFocus={e => e.target.style.boxShadow = '0 0 0 2px rgba(245,158,11,0.6)'}
               onBlur={e => e.target.style.boxShadow = 'none'}

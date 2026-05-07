@@ -22,7 +22,7 @@ export default function Sidebar() {
       width: 230, flexShrink: 0,
       background: 'var(--c-sidebar-bg)',
       display: 'flex', flexDirection: 'column', height: '100vh',
-      fontFamily: 'Poppins, sans-serif',
+      fontFamily: 'Product Sans, sans-serif',
     }}>
       {/* Logo */}
       <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
