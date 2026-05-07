@@ -36,16 +36,6 @@ export default function Login() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    if (isDemo) {
-      await new Promise(r => setTimeout(r, 600)) // small delay for feel
-      if (email === 'tech@xul.es' && password === 'Xul14$') {
-        navigate('/dashboard', { replace: true })
-      } else {
-        setError('Credenciales incorrectas.')
-        setLoading(false)
-      }
-      return
-    }
     const { error } = await signIn(email, password)
     if (error) { setError(error.message); setLoading(false) }
     else navigate('/dashboard', { replace: true })
