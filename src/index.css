@@ -25,7 +25,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: 'Product Sans', system-ui, sans-serif;
+  font-family: 'Poppins', system-ui, sans-serif;
   background: var(--c-bg);
   color: var(--c-text-1);
   -webkit-font-smoothing: antialiased;
