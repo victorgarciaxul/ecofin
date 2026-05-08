@@ -1,7 +1,6 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, LayoutDashboard, FolderOpen, Users, Plus, LogOut, RotateCcw } from 'lucide-react'
+import { TrendingUp, LayoutDashboard, FolderOpen, Users, Plus, LogOut } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { useData } from '../../context/DataContext'
 
 const NAV = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -10,8 +9,7 @@ const NAV = [
 ]
 
 export default function Sidebar() {
-  const { user, signOut, isDemo } = useAuth()
-  const { resetToDemo } = useData()
+  const { user, signOut } = useAuth()
   const location = useLocation()
   const navigate  = useNavigate()
   const userName  = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuario'
@@ -92,20 +90,6 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {isDemo && (
-          <div style={{ marginTop: 16, padding: '10px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)' }}>
-            <p style={{ fontSize: 11, color: '#F59E0B', fontWeight: 600, marginBottom: 2 }}>Modo demo</p>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', lineHeight: 1.4, marginBottom: 8 }}>Datos del Excel importados. Conecta Supabase para guardar cambios.</p>
-            <button
-              onClick={() => { if (window.confirm('¿Restaurar todos los datos del Excel? Se perderán los cambios guardados.')) { resetToDemo(); navigate('/dashboard') } }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '6px 8px', borderRadius: 6, background: 'transparent', border: '1px solid rgba(245,158,11,0.4)', color: '#F59E0B', fontSize: 10, fontWeight: 600, cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(245,158,11,0.15)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <RotateCcw size={10} /> Restaurar demo
-            </button>
-          </div>
-        )}
       </nav>
 
       {/* User */}
