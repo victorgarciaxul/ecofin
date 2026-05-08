@@ -6,7 +6,7 @@ import { useData } from '../../context/DataContext'
 const NAV = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/proyectos',  icon: FolderOpen,      label: 'Proyectos' },
-  { to: '/carga',      icon: Users,           label: 'Carga de Trabajo' },
+  { to: '/carga',      icon: Users,           label: 'Análisis de trabajo' },
 ]
 
 export default function Sidebar() {
