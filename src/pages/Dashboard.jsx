@@ -55,10 +55,11 @@ function fmtK(n) {
 }
 
 function exportCSV(rows, anio) {
-  const headers = ['Código','Contrato','Cliente','Estado','Presupuesto','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
+  const headers = ['Código','Contrato','Cliente','Responsable','Gestor','Estado','Presupuesto','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
   const pct = (num, den) => den ? ((num / den) * 100).toFixed(2) + '%' : '—'
   const lines = rows.map(p => [
-    p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`, p.estado,
+    p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`,
+    `"${p.responsable_contrato || ''}"`, `"${p.gestor_proyecto || ''}"`, p.estado,
     p.presupuesto.toFixed(2), p.facturacion.toFixed(2),
     pct(p.facturacion, p.presupuesto),
     p.coste_personal.toFixed(2), pct(p.coste_personal, p.facturacion),
@@ -262,10 +263,12 @@ export default function Dashboard() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--c-bg-muted)' }}>
-                  <TH label="ID"          col="codigo_proyecto" align="left" minW={90} />
-                  <TH label="Contrato"    col="nombre_contrato" align="left" minW={180} />
-                  <TH label="Cliente"     col="cliente"         align="left" minW={130} />
-                  <TH label="Estado"      col={null}            align="center" minW={90} />
+                  <TH label="ID"           col="codigo_proyecto"      align="left" minW={90} />
+                  <TH label="Contrato"     col="nombre_contrato"      align="left" minW={180} />
+                  <TH label="Cliente"      col="cliente"              align="left" minW={130} />
+                  <TH label="Responsable"  col="responsable_contrato" align="left" minW={120} />
+                  <TH label="Gestor"       col="gestor_proyecto"      align="left" minW={120} />
+                  <TH label="Estado"       col={null}                 align="center" minW={90} />
                   <TH label="Presupuesto" col="presupuesto"     minW={120} />
                   <TH label="Facturado"   col="facturacion"     minW={120} />
                   <TH label="% Ejec."     col="ejec"            minW={110} />
@@ -291,6 +294,8 @@ export default function Dashboard() {
                       <td style={{ padding: '11px 12px' }}><span className="font-numeric" style={{ fontWeight: 700, color: '#F59E0B', fontSize: 12 }}>{p.codigo_proyecto}</span></td>
                       <td style={{ padding: '11px 12px', fontWeight: 500, color: 'var(--c-text-1)', maxWidth: 220 }}><span style={{ display: 'block', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.nombre_contrato}</span></td>
                       <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.cliente}</td>
+                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.responsable_contrato || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
+                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.gestor_proyecto || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'center' }}><span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.presupuesto)}</td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.facturacion)}</td>
@@ -309,7 +314,7 @@ export default function Dashboard() {
               </tbody>
               <tfoot>
                 <tr style={{ background: 'var(--c-bg-muted)', borderTop: '2px solid var(--c-border)' }}>
-                  <td colSpan={4} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {rows.length} proyectos</td>
+                  <td colSpan={6} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {rows.length} proyectos</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#7C4DFF' }}>{fmt(totales.presupuesto)}</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(totales.facturacion)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.facturacion} den={totales.presupuesto} /></td>

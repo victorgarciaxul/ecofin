@@ -114,7 +114,21 @@ export default function Proyectos() {
                 </div>
               </div>
               <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--c-text-1)', marginBottom: 3, lineHeight: 1.3 }}>{p.nombre_contrato}</p>
-              <p style={{ fontSize: 12, color: 'var(--c-text-3)', marginBottom: 14 }}>{p.cliente}</p>
+              <p style={{ fontSize: 12, color: 'var(--c-text-3)', marginBottom: (p.responsable_contrato || p.gestor_proyecto) ? 8 : 14 }}>{p.cliente}</p>
+              {(p.responsable_contrato || p.gestor_proyecto) && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {p.responsable_contrato && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--c-text-2)', background: 'var(--c-bg-muted)', border: '1px solid var(--c-border)', borderRadius: 6, padding: '2px 8px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--c-text-3)', flexShrink: 0 }}>Resp.</span> {p.responsable_contrato}
+                    </span>
+                  )}
+                  {p.gestor_proyecto && (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--c-text-2)', background: 'var(--c-bg-muted)', border: '1px solid var(--c-border)', borderRadius: 6, padding: '2px 8px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--c-text-3)', flexShrink: 0 }}>Gestor</span> {p.gestor_proyecto}
+                    </span>
+                  )}
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Presupuesto</span>
                 <span className="font-numeric" style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-text-1)' }}>{fmt(pres)}</span>
