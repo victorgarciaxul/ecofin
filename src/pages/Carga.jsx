@@ -144,7 +144,7 @@ export default function AnalisisTrabajo() {
   }
 
   async function runAnalysis() {
-    const key = localStorage.getItem('groq_key') || ''
+    const key = localStorage.getItem('groq_key') || import.meta.env.VITE_GROQ_KEY || ''
     if (!key) { setShowGroqSetup(true); return }
     setShowAnalysis(true); setAnalysisLoading(true); setAnalysisResult(null); setAnalysisError(null)
     try {
