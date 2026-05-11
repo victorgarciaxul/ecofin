@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Users, LayoutGrid, RefreshCw, Sparkles,
+  Users, LayoutGrid, BarChart2, RefreshCw, Sparkles,
   Copy, CheckCheck, X, AlertTriangle,
 } from 'lucide-react'
-import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject } from '../lib/clockify'
+import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask } from '../lib/clockify'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -63,6 +64,7 @@ export default function AnalisisTrabajo() {
   const [error, setError]             = useState(null)
   const [byUser, setByUser]           = useState(null)
   const [byProject, setByProject]     = useState(null)
+  const [byTask, setByTask]           = useState(null)
   const [projects, setProjects]       = useState([])
   const [lastRefresh, setLastRefresh] = useState(null)
 
@@ -95,13 +97,15 @@ export default function AnalisisTrabajo() {
     setLoading(true); setError(null)
     const range = getPeriodRange(period)
     try {
-      const [userReport, projectReport, projs] = await Promise.all([
+      const [userReport, projectReport, taskReport, projs] = await Promise.all([
         getSummaryByUser(wsId, range.start, range.end),
         getSummaryByProject(wsId, range.start, range.end),
+        getSummaryByTask(wsId, range.start, range.end),
         getProjects(wsId),
       ])
       setByUser(userReport)
       setByProject(projectReport)
+      setByTask(taskReport)
       setProjects(projs)
       setLastRefresh(new Date())
     } catch (e) {
@@ -248,8 +252,9 @@ export default function AnalisisTrabajo() {
       {/* View tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'var(--c-bg-surface)', padding: 4, borderRadius: 10, border: '1px solid var(--c-border)', width: 'fit-content' }}>
         {[
-          { id: 'persona',  Icon: Users,      label: 'Por persona'  },
-          { id: 'proyecto', Icon: LayoutGrid, label: 'Por proyecto' },
+          { id: 'persona',  Icon: Users,       label: 'Por persona'  },
+          { id: 'proyecto', Icon: LayoutGrid,  label: 'Por proyecto' },
+          { id: 'grafico',  Icon: BarChart2,   label: 'Gráficos'     },
         ].map(({ id, Icon, label }) => (
           <button key={id} onClick={() => setView(id)} style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -284,6 +289,7 @@ export default function AnalisisTrabajo() {
         <>
           {view === 'persona'  && <PersonaView  data={byUser}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
           {view === 'proyecto' && <ProyectoView data={byProject} projectColorMap={projectColorMap} />}
+          {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
         </>
       )}
 
@@ -439,6 +445,126 @@ function ProyectoView({ data, projectColorMap }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Vista gráficos ─────────────────────────────────────────────────────────────
+
+function GraficoView({ data, projectColorMap, totalSeconds }) {
+  const [selected, setSelected] = useState(null)
+
+  if (!data) return <Empty text="Sin datos para este período." />
+  const projs = (data.groupOne || []).filter(p => p._id && p._id !== '000000000000000000000000')
+  if (projs.length === 0) return <Empty text="No hay horas registradas en este período." />
+
+  const totalProj = projs.reduce((s, p) => s + (p.duration || 0), 0)
+
+  const chartData = projs.map(p => ({
+    name: p.name,
+    value: p.duration || 0,
+    pct: totalProj > 0 ? ((p.duration / totalProj) * 100) : 0,
+    id: p._id,
+    color: projectColorMap[p._id] || `hsl(${(p._id.charCodeAt(0) * 47) % 360},55%,48%)`,
+    tasks: p.children || [],
+  }))
+
+  const selProj = selected ? chartData.find(p => p.id === selected) : null
+
+  const RADIAN = Math.PI / 180
+  function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, pct }) {
+    if (pct < 5) return null
+    const r = innerRadius + (outerRadius - innerRadius) * 0.55
+    const x = cx + r * Math.cos(-midAngle * RADIAN)
+    const y = cy + r * Math.sin(-midAngle * RADIAN)
+    return <text x={x} y={y} fill="#fff" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>{pct.toFixed(1)}%</text>
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
+
+      {/* ── Donut chart ── */}
+      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, padding: 24 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-1)', marginBottom: 4 }}>Distribución por proyecto</p>
+        <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 20 }}>Haz clic en un proyecto para ver sus tareas</p>
+        <ResponsiveContainer width="100%" height={240}>
+          <PieChart>
+            <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={110}
+              dataKey="value" labelLine={false} label={<CustomLabel />}
+              onClick={entry => setSelected(selected === entry.id ? null : entry.id)}
+              style={{ cursor: 'pointer' }}>
+              {chartData.map(entry => (
+                <Cell key={entry.id} fill={entry.color}
+                  opacity={selected && selected !== entry.id ? 0.35 : 1}
+                  stroke={selected === entry.id ? '#fff' : 'none'} strokeWidth={2} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(v) => [fmtH(v), 'Horas']} contentStyle={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 8, fontSize: 12 }} />
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {chartData.map(p => (
+            <div key={p.id} onClick={() => setSelected(selected === p.id ? null : p.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '5px 8px', borderRadius: 8, transition: 'background 0.15s',
+                background: selected === p.id ? p.color + '18' : 'transparent',
+                opacity: selected && selected !== p.id ? 0.45 : 1 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--c-text-2)', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.name}</span>
+              <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-text-1)', flexShrink: 0 }}>{p.pct.toFixed(1)}%</span>
+              <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)', flexShrink: 0 }}>{fmtH(p.value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Task breakdown ── */}
+      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, padding: 24 }}>
+        {!selProj ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 200, gap: 10 }}>
+            <BarChart2 size={32} style={{ color: 'var(--c-text-4)' }} />
+            <p style={{ fontSize: 13, color: 'var(--c-text-3)', textAlign: 'center' }}>Selecciona un proyecto<br />para ver el desglose de tareas</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: selProj.color, flexShrink: 0 }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-1)', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{selProj.name}</p>
+              <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)' }}>{fmtH(selProj.value)} total</span>
+            </div>
+
+            {selProj.tasks.length === 0 ? (
+              <p style={{ fontSize: 12, color: 'var(--c-text-3)', padding: '20px 0', textAlign: 'center' }}>Sin tareas registradas en Clockify</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {selProj.tasks
+                  .sort((a, b) => (b.duration || 0) - (a.duration || 0))
+                  .map((task, i) => {
+                    const pct = selProj.value > 0 ? (task.duration / selProj.value) * 100 : 0
+                    const isNoTask = !task._id || task.name === '(No task)'
+                    return (
+                      <div key={task._id || i}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, color: isNoTask ? 'var(--c-text-4)' : 'var(--c-text-2)', fontStyle: isNoTask ? 'italic' : 'normal', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingRight: 8 }}>
+                            {isNoTask ? 'Sin tarea asignada' : task.name}
+                          </span>
+                          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                            <span className="font-numeric" style={{ fontSize: 11, fontWeight: 700, color: selProj.color }}>{pct.toFixed(1)}%</span>
+                            <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{fmtH(task.duration)}</span>
+                          </div>
+                        </div>
+                        <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: selProj.color, opacity: isNoTask ? 0.4 : 0.85, transition: 'width 0.5s' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
