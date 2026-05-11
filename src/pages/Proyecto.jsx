@@ -25,8 +25,8 @@ const ESTADO_MAP = {
 }
 
 function fmt(n) {
-  if (!n || isNaN(n)) return '—'
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+  if (n == null || isNaN(n)) return '—'
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
 function fmtK(n) {
@@ -102,13 +102,15 @@ export default function Proyecto() {
 
   async function handleSaveHeader() {
     const patch = {
-      nombre_contrato: headerForm.nombre_contrato,
-      cliente: headerForm.cliente,
-      codigo_proyecto: headerForm.codigo_proyecto,
-      codigo_contrato: headerForm.codigo_contrato || null,
-      presupuesto_base: Number(headerForm.presupuesto_base) || 0,
-      ampliaciones: Number(headerForm.ampliaciones) || 0,
-      estado: headerForm.estado,
+      nombre_contrato:       headerForm.nombre_contrato,
+      cliente:               headerForm.cliente,
+      codigo_proyecto:       headerForm.codigo_proyecto,
+      codigo_contrato:       headerForm.codigo_contrato || null,
+      presupuesto_base:      Number(headerForm.presupuesto_base) || 0,
+      ampliaciones:          Number(headerForm.ampliaciones) || 0,
+      estado:                headerForm.estado,
+      responsable_contrato:  headerForm.responsable_contrato || null,
+      gestor_proyecto:       headerForm.gestor_proyecto || null,
     }
     await updateProyecto(id, patch)
     setEditHeader(false)
@@ -169,12 +171,28 @@ export default function Proyecto() {
               {headerForm.codigo_contrato && <span> · {headerForm.codigo_contrato}</span>}
               <span> · {headerForm.cliente} · {proyecto.anio}</span>
             </p>
+            {(headerForm.responsable_contrato || headerForm.gestor_proyecto) && (
+              <div style={{ display: 'flex', gap: 16, marginTop: 6, flexWrap: 'wrap' }}>
+                {headerForm.responsable_contrato && (
+                  <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--c-text-2)' }}>Responsable: </span>
+                    {headerForm.responsable_contrato}
+                  </span>
+                )}
+                {headerForm.gestor_proyecto && (
+                  <span style={{ fontSize: 12, color: 'var(--c-text-3)' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--c-text-2)' }}>Gestor: </span>
+                    {headerForm.gestor_proyecto}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 12, padding: 20, flex: 1, maxWidth: 600 }}>
             <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--c-text-3)', marginBottom: 14 }}>Editar proyecto</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              {[['Nombre contrato', 'nombre_contrato'], ['Cliente', 'cliente'], ['Código proyecto', 'codigo_proyecto'], ['Código contrato', 'codigo_contrato']].map(([label, key]) => (
+              {[['Nombre contrato', 'nombre_contrato'], ['Cliente', 'cliente'], ['Código proyecto', 'codigo_proyecto'], ['Código contrato', 'codigo_contrato'], ['Responsable de contrato', 'responsable_contrato'], ['Gestor del proyecto', 'gestor_proyecto']].map(([label, key]) => (
                 <label key={key} style={{ display: 'block' }}>
                   <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>{label}</span>
                   <input value={headerForm[key] || ''} onChange={e => setHeaderForm(f => ({ ...f, [key]: e.target.value }))}

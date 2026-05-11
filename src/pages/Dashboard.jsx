@@ -13,17 +13,23 @@ const ESTADO_BADGE = {
   cerrado:   { label: 'Cerrado',   bg: '#6B728018', color: '#6B7280' },
 }
 
+// 2 decimales; muestra 0,00 € en lugar de —
 function fmt(n) {
   if (n == null || isNaN(n)) return '—'
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 }
 
+// Ganancia: rojo <0, amarillo ≤29,5%, verde ≥29,6%
+// Costes (invert): rojo >60%, amarillo >30%, verde ≤30%
 function PctPill({ num, den, invert = false }) {
   if (!den || den === 0) return <span style={{ color: 'var(--c-text-4)', fontSize: 11 }}>—</span>
   const v = num / den
-  const color = invert
-    ? (v > 0.6 ? '#EF4444' : v > 0.3 ? '#F59E0B' : '#10B981')
-    : (v < 0 ? '#EF4444' : v > 0.15 ? '#10B981' : '#F59E0B')
+  let color
+  if (invert) {
+    color = v > 0.6 ? '#EF4444' : v > 0.3 ? '#F59E0B' : '#10B981'
+  } else {
+    color = v < 0 ? '#EF4444' : v >= 0.296 ? '#10B981' : '#F59E0B'
+  }
   return <span className="font-numeric" style={{ fontSize: 11, fontWeight: 600, color }}>{(v * 100).toFixed(1)}%</span>
 }
 
@@ -49,12 +55,17 @@ function fmtK(n) {
 }
 
 function exportCSV(rows, anio) {
-  const headers = ['Código','Contrato','Cliente','Estado','Presupuesto','Facturado','Coste Personal','Gastos Personal','Producción','Plan Medios','Beneficio','% Beneficio']
+  const headers = ['Código','Contrato','Cliente','Estado','Presupuesto','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
+  const pct = (num, den) => den ? ((num / den) * 100).toFixed(2) + '%' : '—'
   const lines = rows.map(p => [
     p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`, p.estado,
-    p.presupuesto, p.facturacion, p.coste_personal, p.gastos_personal,
-    p.produccion, p.plan_medios, p.beneficio,
-    p.facturacion ? ((p.beneficio / p.facturacion) * 100).toFixed(1) + '%' : '—'
+    p.presupuesto.toFixed(2), p.facturacion.toFixed(2),
+    pct(p.facturacion, p.presupuesto),
+    p.coste_personal.toFixed(2), pct(p.coste_personal, p.facturacion),
+    p.gastos_personal.toFixed(2),
+    p.produccion.toFixed(2), pct(p.produccion, p.facturacion),
+    p.plan_medios.toFixed(2), pct(p.plan_medios, p.facturacion),
+    p.beneficio.toFixed(2), pct(p.beneficio, p.facturacion),
   ].join(';'))
   const csv = [headers.join(';'), ...lines].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
@@ -70,11 +81,11 @@ const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 export default function Dashboard() {
   const { proyectos, entradas } = useData()
   const navigate = useNavigate()
-  const [search, setSearch]         = useState('')
-  const [anio, setAnio]             = useState(CURRENT_YEAR)
-  const [sort, setSort]             = useState({ col: 'codigo_proyecto', dir: 'asc' })
+  const [search, setSearch]             = useState('')
+  const [anio, setAnio]                 = useState(CURRENT_YEAR)
+  const [sort, setSort]                 = useState({ col: 'codigo_proyecto', dir: 'asc' })
   const [estadoFilter, setEstadoFilter] = useState('todos')
-  const [showChart, setShowChart]   = useState(true)
+  const [showChart, setShowChart]       = useState(true)
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
@@ -98,13 +109,19 @@ export default function Dashboard() {
         const matchE = estadoFilter === 'todos' || p.estado === estadoFilter
         return matchQ && matchE
       })
-      .map(p => ({ ...p, presupuesto: Number(p.presupuesto_base) + Number(p.ampliaciones || 0), ...kpis(p.id) }))
+      .map(p => {
+        const presupuesto = Number(p.presupuesto_base) + Number(p.ampliaciones || 0)
+        const k = kpis(p.id)
+        const ejec = presupuesto > 0 ? k.facturacion / presupuesto : 0
+        const pct_gan = k.facturacion > 0 ? k.beneficio / k.facturacion : 0
+        return { ...p, presupuesto, ...k, ejec, pct_gan }
+      })
       .sort((a, b) => {
         const va = a[sort.col], vb = b[sort.col]
         const cmp = typeof va === 'string' ? va.localeCompare(vb) : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyAnio, entradas, search, sort, estadoFilter])
+  }, [proyAnio, entradas, search, sort, estadoFilter]) // eslint-disable-line
 
   const totales = rows.reduce((acc, r) => ({
     presupuesto:     acc.presupuesto     + r.presupuesto,
@@ -144,6 +161,8 @@ export default function Dashboard() {
     { label: 'Beneficio',         value: fmt(totales.beneficio),      sub: totales.facturacion ? `${((totales.beneficio / totales.facturacion) * 100).toFixed(1)}% ganancia` : null, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' },
   ]
 
+  const chartRows = [...rows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15)
+
   return (
     <div style={{ padding: '28px 32px', minHeight: '100%' }}>
       {/* Header */}
@@ -180,17 +199,13 @@ export default function Dashboard() {
       </div>
 
       {/* Overview chart */}
-      {showChart && rows.filter(r => r.facturacion > 0).length > 0 && (
+      {showChart && chartRows.length > 0 && (
         <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
           <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)', marginBottom: 4 }}>Rentabilidad por proyecto</p>
-          <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 16 }}>Facturación acumulada y beneficio · {anio}</p>
+          <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 16 }}>Facturación y beneficio · {anio}</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
-              data={[...rows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15).map(r => ({
-                name: r.codigo_proyecto,
-                facturacion: r.facturacion,
-                beneficio: r.beneficio,
-              }))}
+              data={chartRows.map(r => ({ name: r.codigo_proyecto, facturacion: r.facturacion, beneficio: r.beneficio }))}
               barCategoryGap="25%" barGap={4}
               margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
             >
@@ -198,16 +213,17 @@ export default function Dashboard() {
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
               <Tooltip
-                formatter={(v, n) => [new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v), n === 'facturacion' ? 'Facturación' : 'Beneficio']}
+                formatter={(v, name) => [
+                  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v),
+                  name,
+                ]}
                 labelStyle={{ fontWeight: 700, color: 'var(--c-text-1)', marginBottom: 4 }}
                 contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk', background: 'var(--c-bg-surface)' }}
               />
               <ReferenceLine y={0} stroke="var(--c-border)" />
-              <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[3, 3, 0, 0]} maxBarSize={28} />
-              <Bar dataKey="beneficio" name="Beneficio" radius={[3, 3, 0, 0]} maxBarSize={28}>
-                {[...rows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15).map((r, i) => (
-                  <Cell key={i} fill={r.beneficio >= 0 ? '#06B6D4' : '#EF4444'} />
-                ))}
+              <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[3,3,0,0]} maxBarSize={28} />
+              <Bar dataKey="beneficio"   name="Beneficio"   radius={[3,3,0,0]} maxBarSize={28}>
+                {chartRows.map((r, i) => <Cell key={i} fill={r.beneficio >= 0 ? '#06B6D4' : '#EF4444'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -226,8 +242,8 @@ export default function Dashboard() {
             padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
             background: estadoFilter === e ? '#F59E0B' : 'var(--c-bg-surface)',
             color: estadoFilter === e ? '#fff' : 'var(--c-text-3)',
-            boxShadow: estadoFilter === e ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
             border: `1.5px solid ${estadoFilter === e ? '#F59E0B' : 'var(--c-border)'}`,
+            boxShadow: estadoFilter === e ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
           }}>
             {e === 'todos' ? 'Todos' : e.charAt(0).toUpperCase() + e.slice(1)}
           </button>
@@ -250,15 +266,17 @@ export default function Dashboard() {
                   <TH label="Contrato"    col="nombre_contrato" align="left" minW={180} />
                   <TH label="Cliente"     col="cliente"         align="left" minW={130} />
                   <TH label="Estado"      col={null}            align="center" minW={90} />
-                  <TH label="Presupuesto" col="presupuesto"     minW={110} />
-                  <TH label="Facturado"   col="facturacion"     minW={100} />
-                  <TH label="% Ejec."     col={null}            minW={110} />
-                  <TH label="Coste Pers." col="coste_personal"  minW={100} />
+                  <TH label="Presupuesto" col="presupuesto"     minW={120} />
+                  <TH label="Facturado"   col="facturacion"     minW={120} />
+                  <TH label="% Ejec."     col="ejec"            minW={110} />
+                  <TH label="Coste Pers." col="coste_personal"  minW={120} />
                   <TH label="% CP"        col={null}            minW={70} />
-                  <TH label="Producción"  col="produccion"      minW={100} />
-                  <TH label="P. Medios"   col="plan_medios"     minW={100} />
-                  <TH label="Beneficio"   col="beneficio"       minW={100} />
-                  <TH label="% Gan."      col={null}            minW={70} />
+                  <TH label="Producción"  col="produccion"      minW={120} />
+                  <TH label="% Prod."     col={null}            minW={70} />
+                  <TH label="P. Medios"   col="plan_medios"     minW={120} />
+                  <TH label="% PM"        col={null}            minW={70} />
+                  <TH label="Beneficio"   col="beneficio"       minW={120} />
+                  <TH label="% Gan."      col="pct_gan"         minW={70} />
                 </tr>
               </thead>
               <tbody>
@@ -276,11 +294,13 @@ export default function Dashboard() {
                       <td style={{ padding: '11px 12px', textAlign: 'center' }}><span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.presupuesto)}</td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.facturacion)}</td>
-                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><BarEjec value={p.presupuesto ? p.facturacion / p.presupuesto : null} /></td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><BarEjec value={p.ejec} /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.coste_personal)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.coste_personal} den={p.facturacion} invert /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.produccion)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.produccion} den={p.facturacion} invert /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.plan_medios)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.plan_medios} den={p.facturacion} invert /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: p.beneficio < 0 ? '#EF4444' : '#10B981' }}>{fmt(p.beneficio)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.beneficio} den={p.facturacion} /></td>
                     </tr>
@@ -296,7 +316,9 @@ export default function Dashboard() {
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.coste_personal)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.coste_personal} den={totales.facturacion} invert /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.produccion)}</td>
+                  <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.produccion} den={totales.facturacion} invert /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.plan_medios)}</td>
+                  <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.plan_medios} den={totales.facturacion} invert /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' }}>{fmt(totales.beneficio)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.beneficio} den={totales.facturacion} /></td>
                 </tr>

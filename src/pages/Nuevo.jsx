@@ -11,7 +11,8 @@ export default function Nuevo() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     codigo_proyecto: '', codigo_contrato: '', nombre_contrato: '',
-    cliente: '', anio: CURRENT_YEAR, presupuesto_base: '', ampliaciones: '', estado: 'activo',
+    cliente: '', responsable_contrato: '', gestor_proyecto: '',
+    anio: CURRENT_YEAR, presupuesto_base: '', ampliaciones: '', estado: 'activo',
   })
   const [errors, setErrors] = useState({})
 
@@ -33,8 +34,10 @@ export default function Nuevo() {
     const { data } = await addProyecto({
       codigo_proyecto: form.codigo_proyecto.trim(),
       codigo_contrato: form.codigo_contrato.trim() || null,
-      nombre_contrato: form.nombre_contrato.trim(),
-      cliente: form.cliente.trim(),
+      nombre_contrato:      form.nombre_contrato.trim(),
+      cliente:              form.cliente.trim(),
+      responsable_contrato: form.responsable_contrato.trim() || null,
+      gestor_proyecto:      form.gestor_proyecto.trim() || null,
       anio: Number(form.anio),
       presupuesto_base: Number(form.presupuesto_base) || 0,
       ampliaciones: Number(form.ampliaciones) || 0,
@@ -76,6 +79,10 @@ export default function Nuevo() {
           </div>
           {inp('Nombre del contrato', 'nombre_contrato', 'text', 'Ej: Agencia Digital de Andalucía', true)}
           {inp('Cliente / Entidad', 'cliente', 'text', 'Ej: Junta de Andalucía, SANDETEL…', true)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            {inp('Responsable de contrato', 'responsable_contrato', 'text', 'Nombre del responsable')}
+            {inp('Gestor del proyecto', 'gestor_proyecto', 'text', 'Nombre del gestor')}
+          </div>
 
           <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: 18 }}>
             <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginBottom: 14 }}>Presupuesto</p>
