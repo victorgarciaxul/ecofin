@@ -67,12 +67,12 @@ export default function AnalisisTrabajo() {
   const [lastRefresh, setLastRefresh] = useState(null)
 
   // AI
-  const [showAnalysis, setShowAnalysis]       = useState(false)
+  const [showAnalysis, setShowAnalysis]     = useState(false)
   const [analysisLoading, setAnalysisLoading] = useState(false)
-  const [analysisResult, setAnalysisResult]   = useState(null)
-  const [analysisError, setAnalysisError]     = useState(null)
-  const [showClaudeSetup, setShowClaudeSetup] = useState(false)
-  const [claudeKeyInput, setClaudeKeyInput]   = useState('')
+  const [analysisResult, setAnalysisResult] = useState(null)
+  const [analysisError, setAnalysisError]   = useState(null)
+  const [showGroqSetup, setShowGroqSetup]   = useState(false)
+  const [groqKeyInput, setGroqKeyInput]     = useState('')
 
   // Init workspaces
   useEffect(() => {
@@ -144,25 +144,22 @@ export default function AnalisisTrabajo() {
   }
 
   async function runAnalysis() {
-    const key = localStorage.getItem('claude_key') || ''
-    if (!key) { setShowClaudeSetup(true); return }
+    const key = localStorage.getItem('groq_key') || ''
+    if (!key) { setShowGroqSetup(true); return }
     setShowAnalysis(true); setAnalysisLoading(true); setAnalysisResult(null); setAnalysisError(null)
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'x-api-key': key, 'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001', max_tokens: 2048,
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 2048,
           messages: [{ role: 'user', content: buildPrompt() }],
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `Error ${res.status}`) }
       const data = await res.json()
-      setAnalysisResult(data.content[0].text)
+      setAnalysisResult(data.choices[0].message.content)
     } catch (e) {
       setAnalysisError(e.message)
     } finally {
@@ -265,14 +262,14 @@ export default function AnalisisTrabajo() {
         <AnalysisModal loading={analysisLoading} result={analysisResult} error={analysisError}
           onClose={() => setShowAnalysis(false)} onRetry={runAnalysis} />
       )}
-      {showClaudeSetup && (
-        <ClaudeSetupModal value={claudeKeyInput} onChange={setClaudeKeyInput}
+      {showGroqSetup && (
+        <GroqSetupModal value={groqKeyInput} onChange={setGroqKeyInput}
           onConfirm={() => {
-            if (!claudeKeyInput.trim()) return
-            localStorage.setItem('claude_key', claudeKeyInput.trim())
-            setShowClaudeSetup(false); runAnalysis()
+            if (!groqKeyInput.trim()) return
+            localStorage.setItem('groq_key', groqKeyInput.trim())
+            setShowGroqSetup(false); runAnalysis()
           }}
-          onClose={() => setShowClaudeSetup(false)} />
+          onClose={() => setShowGroqSetup(false)} />
       )}
     </div>
   )
@@ -424,30 +421,39 @@ function Empty({ text }) {
   )
 }
 
-// ── Claude key setup ───────────────────────────────────────────────────────────
+// ── Groq key setup ─────────────────────────────────────────────────────────────
 
-function ClaudeSetupModal({ value, onChange, onConfirm, onClose }) {
+function GroqSetupModal({ value, onChange, onConfirm, onClose }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={onClose}>
-      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, padding: 28, width: 440 }}
+      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, padding: 28, width: 460 }}
         onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg,#7C4DFF,#06B6D4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Sparkles size={18} color="white" />
           </div>
           <div>
             <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--c-text-1)' }}>Análisis con IA</p>
-            <p style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Necesitas una API Key de Anthropic</p>
+            <p style={{ fontSize: 12, color: 'var(--c-text-3)' }}>Llama 3.3 70B · Groq · Gratuito</p>
           </div>
         </div>
-        <p style={{ fontSize: 12, color: 'var(--c-text-3)', marginBottom: 14, lineHeight: 1.5 }}>
-          Obtén tu clave en{' '}
-          <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" style={{ color: '#7C4DFF', fontWeight: 600 }}>
-            console.anthropic.com
-          </a>. Se guarda localmente.
-        </p>
-        <input value={value} onChange={e => onChange(e.target.value)} placeholder="sk-ant-…" type="password" autoFocus
+        <div style={{ background: 'var(--c-bg-muted)', border: '1px solid var(--c-border)', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+          <p style={{ fontSize: 12, color: 'var(--c-text-2)', lineHeight: 1.6, marginBottom: 6 }}>
+            Groq ofrece el modelo <strong style={{ color: 'var(--c-text-1)' }}>Llama 3.3 70B</strong> completamente gratis.
+            Solo necesitas crear una cuenta y generar una API key:
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--c-text-3)', lineHeight: 1.6 }}>
+            1. Ve a{' '}
+            <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" style={{ color: '#7C4DFF', fontWeight: 600 }}>
+              console.groq.com/keys
+            </a>
+            {' '}→ crea una cuenta gratis<br />
+            2. Clic en <strong style={{ color: 'var(--c-text-1)' }}>Create API Key</strong> → copia la clave<br />
+            3. Pégala aquí
+          </p>
+        </div>
+        <input value={value} onChange={e => onChange(e.target.value)} placeholder="gsk_…" type="password" autoFocus
           onKeyDown={e => { if (e.key === 'Enter') onConfirm() }}
           style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, boxSizing: 'border-box', outline: 'none', marginBottom: 16 }} />
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -506,7 +512,7 @@ function AnalysisModal({ loading, result, error, onClose, onRetry }) {
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text-1)' }}>Análisis de trabajo</p>
-            <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Generado por Claude · Haiku</p>
+            <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Llama 3.3 · 70B · Groq</p>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {result && (
