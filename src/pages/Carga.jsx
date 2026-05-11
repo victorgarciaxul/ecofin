@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Users, LayoutGrid, RefreshCw, Sparkles,
   Copy, CheckCheck, X, AlertTriangle,
@@ -67,12 +67,14 @@ export default function AnalisisTrabajo() {
   const [lastRefresh, setLastRefresh] = useState(null)
 
   // AI
-  const [showAnalysis, setShowAnalysis]     = useState(false)
+  const [showAnalysis, setShowAnalysis]       = useState(false)
   const [analysisLoading, setAnalysisLoading] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState(null)
-  const [analysisError, setAnalysisError]   = useState(null)
-  const [showGroqSetup, setShowGroqSetup]   = useState(false)
-  const [groqKeyInput, setGroqKeyInput]     = useState('')
+  const [analysisResult, setAnalysisResult]   = useState(null)
+  const [analysisError, setAnalysisError]     = useState(null)
+  const [showGroqSetup, setShowGroqSetup]     = useState(false)
+  const [groqKeyInput, setGroqKeyInput]       = useState('')
+  const [chatMessages, setChatMessages]       = useState([])
+  const [chatLoading, setChatLoading]         = useState(false)
 
   // Init workspaces
   useEffect(() => {
@@ -146,7 +148,7 @@ export default function AnalisisTrabajo() {
   async function runAnalysis() {
     const key = localStorage.getItem('groq_key') || import.meta.env.VITE_GROQ_KEY || ''
     if (!key) { setShowGroqSetup(true); return }
-    setShowAnalysis(true); setAnalysisLoading(true); setAnalysisResult(null); setAnalysisError(null)
+    setShowAnalysis(true); setAnalysisLoading(true); setAnalysisResult(null); setAnalysisError(null); setChatMessages([])
     try {
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -164,6 +166,34 @@ export default function AnalisisTrabajo() {
       setAnalysisError(e.message)
     } finally {
       setAnalysisLoading(false)
+    }
+  }
+
+  async function sendChatMessage(text) {
+    if (!text.trim() || chatLoading || !analysisResult) return
+    const key = localStorage.getItem('groq_key') || import.meta.env.VITE_GROQ_KEY || ''
+    const userMsg = { role: 'user', content: text.trim() }
+    setChatMessages(prev => [...prev, userMsg])
+    setChatLoading(true)
+    try {
+      const history = [
+        { role: 'user', content: buildPrompt() },
+        { role: 'assistant', content: analysisResult },
+        ...chatMessages.map(m => ({ role: m.role, content: m.content })),
+        userMsg,
+      ]
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'llama-3.3-70b-versatile', max_tokens: 1024, messages: history }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `Error ${res.status}`) }
+      const data = await res.json()
+      setChatMessages(prev => [...prev, { role: 'assistant', content: data.choices[0].message.content }])
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${e.message}`, isError: true }])
+    } finally {
+      setChatLoading(false)
     }
   }
 
@@ -260,7 +290,9 @@ export default function AnalisisTrabajo() {
       {/* Modals */}
       {showAnalysis && (
         <AnalysisModal loading={analysisLoading} result={analysisResult} error={analysisError}
-          onClose={() => setShowAnalysis(false)} onRetry={runAnalysis} />
+          chatMessages={chatMessages} chatLoading={chatLoading}
+          onClose={() => { setShowAnalysis(false); setChatMessages([]) }}
+          onRetry={runAnalysis} onSendMessage={sendChatMessage} />
       )}
       {showGroqSetup && (
         <GroqSetupModal value={groqKeyInput} onChange={setGroqKeyInput}
@@ -469,12 +501,24 @@ function GroqSetupModal({ value, onChange, onConfirm, onClose }) {
 
 // ── Analysis modal ─────────────────────────────────────────────────────────────
 
-function AnalysisModal({ loading, result, error, onClose, onRetry }) {
-  const [copied, setCopied] = useState(false)
+function AnalysisModal({ loading, result, error, chatMessages, chatLoading, onClose, onRetry, onSendMessage }) {
+  const [copied, setCopied]   = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const scrollRef = useRef(null)
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [chatMessages, chatLoading])
 
   function copyText() {
     if (!result) return
     navigator.clipboard.writeText(result).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
+  function handleSend() {
+    if (!chatInput.trim() || chatLoading) return
+    onSendMessage(chatInput)
+    setChatInput('')
   }
 
   function renderInline(text) {
@@ -506,9 +550,11 @@ function AnalysisModal({ loading, result, error, onClose, onRetry }) {
       onClick={onClose}>
       <div style={{ background: 'var(--c-bg-surface)', borderLeft: '1px solid var(--c-border)', width: 520, height: '100vh', display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.15)' }}
         onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: 'linear-gradient(135deg,#7C4DFF,#06B6D4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Sparkles size={15} color="white" />
+
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#7C4DFF,#06B6D4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Sparkles size={14} color="white" />
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text-1)' }}>Análisis de trabajo</p>
@@ -520,18 +566,21 @@ function AnalysisModal({ loading, result, error, onClose, onRetry }) {
                 {copied ? <CheckCheck size={12} /> : <Copy size={12} />} {copied ? 'Copiado' : 'Copiar'}
               </button>
             )}
+            {result && !loading && (
+              <button onClick={onRetry} title="Regenerar" style={{ display: 'flex', alignItems: 'center', padding: '5px 8px', borderRadius: 7, background: 'var(--c-bg-muted)', color: 'var(--c-text-3)', border: '1px solid var(--c-border)', cursor: 'pointer' }}>
+                <RefreshCw size={12} />
+              </button>
+            )}
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-3)', padding: 4, display: 'flex' }}><X size={16} /></button>
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        {/* Content */}
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 8px' }}>
           {loading && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 48 }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid #7C4DFF', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-              <p style={{ fontSize: 13, color: 'var(--c-text-3)', textAlign: 'center' }}>
-                Analizando la carga de trabajo…<br />
-                <span style={{ fontSize: 11, color: 'var(--c-text-4)' }}>Unos segundos</span>
-              </p>
+              <p style={{ fontSize: 13, color: 'var(--c-text-3)', textAlign: 'center' }}>Analizando la carga de trabajo…<br /><span style={{ fontSize: 11, color: 'var(--c-text-4)' }}>Unos segundos</span></p>
             </div>
           )}
           {error && (
@@ -541,15 +590,83 @@ function AnalysisModal({ loading, result, error, onClose, onRetry }) {
               <button onClick={onRetry} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 7, background: '#EF4444', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>Reintentar</button>
             </div>
           )}
-          {result && !loading && <div style={{ paddingBottom: 24 }}>{renderMarkdown(result)}</div>}
+
+          {/* Initial analysis */}
+          {result && !loading && (
+            <div style={{ paddingBottom: 8 }}>{renderMarkdown(result)}</div>
+          )}
+
+          {/* Chat messages */}
+          {chatMessages.length > 0 && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0 12px' }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--c-border)' }} />
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--c-text-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Conversación</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--c-border)' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {chatMessages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <div style={{
+                      maxWidth: '88%', padding: '10px 14px', borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+                      background: msg.role === 'user' ? 'linear-gradient(135deg,#7C4DFF,#06B6D4)' : msg.isError ? '#EF444418' : 'var(--c-bg-muted)',
+                      border: msg.role === 'user' ? 'none' : `1px solid ${msg.isError ? '#EF444440' : 'var(--c-border)'}`,
+                    }}>
+                      <p style={{ fontSize: 13, color: msg.role === 'user' ? '#fff' : msg.isError ? '#EF4444' : 'var(--c-text-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+                        {msg.role === 'assistant' ? renderInline(msg.content) : msg.content}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+                    <div style={{ padding: '10px 14px', borderRadius: '12px 12px 12px 4px', background: 'var(--c-bg-muted)', border: '1px solid var(--c-border)' }}>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {[0,1,2].map(j => (
+                          <div key={j} style={{ width: 6, height: 6, borderRadius: '50%', background: '#7C4DFF', animation: 'bounce 1.2s ease-in-out infinite', animationDelay: `${j * 0.2}s` }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          <div style={{ height: 8 }} />
         </div>
 
+        {/* Chat input */}
         {result && !loading && (
-          <div style={{ padding: '12px 24px', borderTop: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-            <p style={{ fontSize: 11, color: 'var(--c-text-4)' }}>Basado en datos de Clockify</p>
-            <button onClick={onRetry} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 7, background: 'var(--c-bg-muted)', color: 'var(--c-text-2)', border: '1px solid var(--c-border)', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>
-              <RefreshCw size={11} /> Regenerar
-            </button>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--c-border)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <textarea
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+                placeholder="Pregunta algo sobre el análisis… (Enter para enviar)"
+                rows={2}
+                style={{
+                  flex: 1, padding: '9px 12px', borderRadius: 10, fontSize: 13,
+                  border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)',
+                  color: 'var(--c-text-1)', outline: 'none', resize: 'none',
+                  fontFamily: 'inherit', lineHeight: 1.4,
+                }}
+                onFocus={e => e.target.style.borderColor = '#7C4DFF'}
+                onBlur={e => e.target.style.borderColor = 'var(--c-border)'}
+              />
+              <button onClick={handleSend} disabled={!chatInput.trim() || chatLoading}
+                style={{
+                  width: 38, height: 38, borderRadius: 10, border: 'none', cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'default',
+                  background: chatInput.trim() && !chatLoading ? 'linear-gradient(135deg,#7C4DFF,#06B6D4)' : 'var(--c-bg-muted)',
+                  color: chatInput.trim() && !chatLoading ? '#fff' : 'var(--c-text-4)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s',
+                }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--c-text-4)', marginTop: 5, textAlign: 'center' }}>Shift+Enter para nueva línea · Contexto completo incluido</p>
           </div>
         )}
       </div>
