@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, BarChart2 } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, BarChart2, Layers } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -89,6 +89,7 @@ export default function Dashboard() {
   const [responsableFilter, setResponsableFilter] = useState('')
   const [gestorFilter, setGestorFilter]           = useState('')
   const [showChart, setShowChart]                 = useState(true)
+  const [vistaGlobal, setVistaGlobal]             = useState(false)
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
@@ -97,6 +98,18 @@ export default function Dashboard() {
 
   function kpis(id) {
     const e = entradas.filter(x => x.proyecto_id === id)
+    const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
+    const facturacion     = sum('facturacion')
+    const coste_personal  = sum('coste_personal')
+    const gastos_personal = sum('gastos_personal')
+    const produccion      = sum('produccion')
+    const plan_medios     = sum('plan_medios')
+    const beneficio       = facturacion - coste_personal - gastos_personal - produccion - plan_medios
+    return { facturacion, coste_personal, gastos_personal, produccion, plan_medios, beneficio }
+  }
+
+  function kpisForIds(ids) {
+    const e = entradas.filter(x => ids.includes(x.proyecto_id))
     const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
     const facturacion     = sum('facturacion')
     const coste_personal  = sum('coste_personal')
@@ -131,7 +144,44 @@ export default function Dashboard() {
       })
   }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter]) // eslint-disable-line
 
-  const totales = rows.reduce((acc, r) => ({
+  // ── Vista global: agrupa todos los años por código de proyecto ────────────────
+  const rowsGlobal = useMemo(() => {
+    const q = search.toLowerCase()
+    const groups = {}
+    proyectos.forEach(p => {
+      const key = p.codigo_proyecto
+      if (!groups[key]) groups[key] = []
+      groups[key].push(p)
+    })
+    return Object.values(groups)
+      .map(all => {
+        const latest  = [...all].sort((a, b) => b.anio - a.anio)[0]
+        const ids     = all.map(p => p.id)
+        const presupuesto = all.reduce((s, p) => s + Number(p.presupuesto_base || 0) + Number(p.ampliaciones || 0), 0)
+        const k       = kpisForIds(ids)
+        const ejec    = presupuesto > 0 ? k.facturacion / presupuesto : 0
+        const pct_gan = k.facturacion > 0 ? k.beneficio / k.facturacion : 0
+        const anios   = [...new Set(all.map(p => p.anio))].sort()
+        const periodoLabel = anios.length > 1 ? `${anios[0]}–${anios[anios.length - 1]}` : String(anios[0])
+        return { ...latest, presupuesto, ...k, ejec, pct_gan, periodoLabel, multiYear: anios.length > 1, latestId: latest.id }
+      })
+      .filter(p => {
+        const matchQ = !q || p.nombre_contrato.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.codigo_proyecto.toLowerCase().includes(q)
+        const matchE = estadoFilter.size === 0 || estadoFilter.has(p.estado)
+        const matchR = !responsableFilter || p.responsable_contrato === responsableFilter
+        const matchG = !gestorFilter      || p.gestor_proyecto      === gestorFilter
+        return matchQ && matchE && matchR && matchG
+      })
+      .sort((a, b) => {
+        const va = a[sort.col], vb = b[sort.col]
+        const cmp = typeof va === 'string' ? (va || '').localeCompare(vb || '') : (Number(va) || 0) - (Number(vb) || 0)
+        return sort.dir === 'asc' ? cmp : -cmp
+      })
+  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter]) // eslint-disable-line
+
+  const activeRows = vistaGlobal ? rowsGlobal : rows
+
+  const totales = activeRows.reduce((acc, r) => ({
     presupuesto:     acc.presupuesto     + r.presupuesto,
     facturacion:     acc.facturacion     + r.facturacion,
     coste_personal:  acc.coste_personal  + r.coste_personal,
@@ -169,7 +219,7 @@ export default function Dashboard() {
     { label: 'Beneficio',         value: fmt(totales.beneficio),      sub: totales.facturacion ? `${((totales.beneficio / totales.facturacion) * 100).toFixed(1)}% ganancia` : null, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' },
   ]
 
-  const chartRows = [...rows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15)
+  const chartRows = [...activeRows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100%' }}>
@@ -180,7 +230,11 @@ export default function Dashboard() {
           <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 2 }}>{rows.length} de {proyAnio.length} proyecto{proyAnio.length !== 1 ? 's' : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <select value={anio} onChange={e => setAnio(Number(e.target.value))} style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', cursor: 'pointer' }}>
+          <button onClick={() => setVistaGlobal(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: vistaGlobal ? '#7C4DFF18' : 'var(--c-bg-surface)', color: vistaGlobal ? '#7C4DFF' : 'var(--c-text-2)', border: `1.5px solid ${vistaGlobal ? '#7C4DFF50' : 'var(--c-border)'}`, cursor: 'pointer', boxShadow: vistaGlobal ? '0 2px 8px rgba(124,77,255,0.2)' : 'none' }}>
+            <Layers size={14} /> Vista global
+          </button>
+          <select value={anio} onChange={e => setAnio(Number(e.target.value))} disabled={vistaGlobal}
+            style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: vistaGlobal ? 'var(--c-bg-muted)' : 'var(--c-bg-surface)', color: vistaGlobal ? 'var(--c-text-4)' : 'var(--c-text-1)', cursor: vistaGlobal ? 'default' : 'pointer', opacity: vistaGlobal ? 0.5 : 1 }}>
             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <button onClick={() => setShowChart(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: showChart ? '#F59E0B18' : 'var(--c-bg-surface)', color: showChart ? '#F59E0B' : 'var(--c-text-2)', border: `1.5px solid ${showChart ? '#F59E0B50' : 'var(--c-border)'}`, cursor: 'pointer' }}>
@@ -294,8 +348,14 @@ export default function Dashboard() {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
-        {rows.length === 0 ? (
+      <div style={{ background: 'var(--c-bg-surface)', border: `1px solid ${vistaGlobal ? '#7C4DFF40' : 'var(--c-border)'}`, borderRadius: 14, overflow: 'hidden' }}>
+        {vistaGlobal && (
+          <div style={{ padding: '10px 16px', background: '#7C4DFF0C', borderBottom: '1px solid #7C4DFF20', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Layers size={13} style={{ color: '#7C4DFF' }} />
+            <p style={{ fontSize: 12, color: '#7C4DFF', fontWeight: 600 }}>Vista global activa — proyectos agrupados por código, sumando todos los años</p>
+          </div>
+        )}
+        {activeRows.length === 0 ? (
           <div style={{ padding: 56, textAlign: 'center' }}>
             <AlertCircle size={30} style={{ color: 'var(--c-text-4)', margin: '0 auto 12px', display: 'block' }} />
             <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-text-3)' }}>No hay proyectos para este filtro</p>
@@ -306,6 +366,7 @@ export default function Dashboard() {
               <thead>
                 <tr style={{ background: 'var(--c-bg-muted)' }}>
                   <TH label="ID"           col="codigo_proyecto"      align="left" minW={90} />
+                  {vistaGlobal && <TH label="Período" col={null} align="left" minW={90} />}
                   <TH label="Contrato"     col="nombre_contrato"      align="left" minW={180} />
                   <TH label="Cliente"      col="cliente"              align="left" minW={130} />
                   <TH label="Responsable"  col="responsable_contrato" align="left" minW={120} />
@@ -325,15 +386,25 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((p, i) => {
+                {activeRows.map((p, i) => {
                   const badge = ESTADO_BADGE[p.estado] || ESTADO_BADGE.activo
                   return (
-                    <tr key={p.id} onClick={() => navigate(`/proyectos/${p.id}`)}
+                    <tr key={p.id} onClick={() => navigate(`/proyectos/${p.latestId || p.id}`)}
                       style={{ borderBottom: '1px solid var(--c-border-light)', cursor: 'pointer', background: i % 2 !== 0 ? 'var(--c-bg-muted)' : 'transparent' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#F59E0B08'}
+                      onMouseEnter={e => e.currentTarget.style.background = vistaGlobal ? '#7C4DFF08' : '#F59E0B08'}
                       onMouseLeave={e => e.currentTarget.style.background = i % 2 !== 0 ? 'var(--c-bg-muted)' : 'transparent'}
                     >
-                      <td style={{ padding: '11px 12px' }}><span className="font-numeric" style={{ fontWeight: 700, color: '#F59E0B', fontSize: 12 }}>{p.codigo_proyecto}</span></td>
+                      <td style={{ padding: '11px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span className="font-numeric" style={{ fontWeight: 700, color: '#F59E0B', fontSize: 12 }}>{p.codigo_proyecto}</span>
+                          {vistaGlobal && p.multiYear && <span style={{ fontSize: 9, fontWeight: 700, color: '#7C4DFF', background: '#7C4DFF15', padding: '1px 5px', borderRadius: 4 }}>MULTI</span>}
+                        </div>
+                      </td>
+                      {vistaGlobal && (
+                        <td style={{ padding: '11px 12px' }}>
+                          <span className="font-numeric" style={{ fontSize: 12, fontWeight: 600, color: p.multiYear ? '#7C4DFF' : 'var(--c-text-3)', background: p.multiYear ? '#7C4DFF12' : 'transparent', padding: p.multiYear ? '2px 7px' : '0', borderRadius: 6 }}>{p.periodoLabel}</span>
+                        </td>
+                      )}
                       <td style={{ padding: '11px 12px', fontWeight: 500, color: 'var(--c-text-1)', maxWidth: 220 }}><span style={{ display: 'block', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.nombre_contrato}</span></td>
                       <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.cliente}</td>
                       <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.responsable_contrato || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
@@ -356,7 +427,7 @@ export default function Dashboard() {
               </tbody>
               <tfoot>
                 <tr style={{ background: 'var(--c-bg-muted)', borderTop: '2px solid var(--c-border)' }}>
-                  <td colSpan={6} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {rows.length} proyectos</td>
+                  <td colSpan={vistaGlobal ? 7 : 6} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {activeRows.length} proyecto{activeRows.length !== 1 ? 's' : ''}{vistaGlobal ? ' (vista global)' : ''}</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#7C4DFF' }}>{fmt(totales.presupuesto)}</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(totales.facturacion)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.facturacion} den={totales.presupuesto} /></td>
