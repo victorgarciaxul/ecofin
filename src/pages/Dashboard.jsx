@@ -85,10 +85,15 @@ export default function Dashboard() {
   const [search, setSearch]             = useState('')
   const [anio, setAnio]                 = useState(CURRENT_YEAR)
   const [sort, setSort]                 = useState({ col: 'codigo_proyecto', dir: 'asc' })
-  const [estadoFilter, setEstadoFilter] = useState(new Set()) // vacío = todos
-  const [showChart, setShowChart]       = useState(true)
+  const [estadoFilter, setEstadoFilter]         = useState(new Set()) // vacío = todos
+  const [responsableFilter, setResponsableFilter] = useState('')
+  const [gestorFilter, setGestorFilter]           = useState('')
+  const [showChart, setShowChart]                 = useState(true)
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
+
+  const responsables = useMemo(() => [...new Set(proyAnio.map(p => p.responsable_contrato).filter(Boolean))].sort(), [proyAnio])
+  const gestores     = useMemo(() => [...new Set(proyAnio.map(p => p.gestor_proyecto).filter(Boolean))].sort(),     [proyAnio])
 
   function kpis(id) {
     const e = entradas.filter(x => x.proyecto_id === id)
@@ -108,7 +113,9 @@ export default function Dashboard() {
       .filter(p => {
         const matchQ = !q || p.nombre_contrato.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.codigo_proyecto.toLowerCase().includes(q)
         const matchE = estadoFilter.size === 0 || estadoFilter.has(p.estado)
-        return matchQ && matchE
+        const matchR = !responsableFilter || p.responsable_contrato === responsableFilter
+        const matchG = !gestorFilter      || p.gestor_proyecto      === gestorFilter
+        return matchQ && matchE && matchR && matchG
       })
       .map(p => {
         const presupuesto = Number(p.presupuesto_base) + Number(p.ampliaciones || 0)
@@ -122,7 +129,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? va.localeCompare(vb) : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyAnio, entradas, search, sort, estadoFilter]) // eslint-disable-line
+  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter]) // eslint-disable-line
 
   const totales = rows.reduce((acc, r) => ({
     presupuesto:     acc.presupuesto     + r.presupuesto,
@@ -233,11 +240,31 @@ export default function Dashboard() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '0 0 280px' }}>
+        <div style={{ position: 'relative', flex: '0 0 260px' }}>
           <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--c-text-4)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proyecto, cliente…"
             style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8, fontSize: 13, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', outline: 'none', boxSizing: 'border-box' }} />
         </div>
+        {responsables.length > 0 && (
+          <select value={responsableFilter} onChange={e => setResponsableFilter(e.target.value)}
+            style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: `1.5px solid ${responsableFilter ? '#7C4DFF' : 'var(--c-border)'}`, background: responsableFilter ? '#7C4DFF12' : 'var(--c-bg-surface)', color: responsableFilter ? '#7C4DFF' : 'var(--c-text-3)', cursor: 'pointer', outline: 'none' }}>
+            <option value="">Responsable</option>
+            {responsables.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+        {gestores.length > 0 && (
+          <select value={gestorFilter} onChange={e => setGestorFilter(e.target.value)}
+            style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, border: `1.5px solid ${gestorFilter ? '#06B6D4' : 'var(--c-border)'}`, background: gestorFilter ? '#06B6D412' : 'var(--c-bg-surface)', color: gestorFilter ? '#06B6D4' : 'var(--c-text-3)', cursor: 'pointer', outline: 'none' }}>
+            <option value="">Gestor</option>
+            {gestores.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        )}
+        {(responsableFilter || gestorFilter) && (
+          <button onClick={() => { setResponsableFilter(''); setGestorFilter('') }}
+            style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'none', border: '1.5px solid var(--c-border)', color: 'var(--c-text-4)', cursor: 'pointer' }}>
+            Limpiar ×
+          </button>
+        )}
         <button onClick={() => setEstadoFilter(new Set())} style={{
           padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
           background: estadoFilter.size === 0 ? '#F59E0B' : 'var(--c-bg-surface)',
