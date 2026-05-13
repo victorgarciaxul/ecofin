@@ -85,7 +85,7 @@ export default function Dashboard() {
   const [search, setSearch]             = useState('')
   const [anio, setAnio]                 = useState(CURRENT_YEAR)
   const [sort, setSort]                 = useState({ col: 'codigo_proyecto', dir: 'asc' })
-  const [estadoFilter, setEstadoFilter] = useState('todos')
+  const [estadoFilter, setEstadoFilter] = useState(new Set()) // vacío = todos
   const [showChart, setShowChart]       = useState(true)
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
@@ -107,7 +107,7 @@ export default function Dashboard() {
     return proyAnio
       .filter(p => {
         const matchQ = !q || p.nombre_contrato.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.codigo_proyecto.toLowerCase().includes(q)
-        const matchE = estadoFilter === 'todos' || p.estado === estadoFilter
+        const matchE = estadoFilter.size === 0 || estadoFilter.has(p.estado)
         return matchQ && matchE
       })
       .map(p => {
@@ -238,17 +238,32 @@ export default function Dashboard() {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar proyecto, cliente…"
             style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8, fontSize: 13, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', outline: 'none', boxSizing: 'border-box' }} />
         </div>
-        {['todos', 'activo', 'preparado', 'cerrado'].map(e => (
-          <button key={e} onClick={() => setEstadoFilter(e)} style={{
-            padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-            background: estadoFilter === e ? '#F59E0B' : 'var(--c-bg-surface)',
-            color: estadoFilter === e ? '#fff' : 'var(--c-text-3)',
-            border: `1.5px solid ${estadoFilter === e ? '#F59E0B' : 'var(--c-border)'}`,
-            boxShadow: estadoFilter === e ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
-          }}>
-            {e === 'todos' ? 'Todos' : e.charAt(0).toUpperCase() + e.slice(1)}
-          </button>
-        ))}
+        <button onClick={() => setEstadoFilter(new Set())} style={{
+          padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+          background: estadoFilter.size === 0 ? '#F59E0B' : 'var(--c-bg-surface)',
+          color: estadoFilter.size === 0 ? '#fff' : 'var(--c-text-3)',
+          border: `1.5px solid ${estadoFilter.size === 0 ? '#F59E0B' : 'var(--c-border)'}`,
+          boxShadow: estadoFilter.size === 0 ? '0 2px 8px rgba(245,158,11,0.3)' : 'none',
+        }}>Todos</button>
+        {['activo', 'preparado', 'cerrado'].map(e => {
+          const active = estadoFilter.has(e)
+          const { color } = ESTADO_BADGE[e]
+          return (
+            <button key={e} onClick={() => setEstadoFilter(prev => {
+              const next = new Set(prev)
+              next.has(e) ? next.delete(e) : next.add(e)
+              return next
+            })} style={{
+              padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
+              background: active ? color + '22' : 'var(--c-bg-surface)',
+              color: active ? color : 'var(--c-text-3)',
+              border: `1.5px solid ${active ? color : 'var(--c-border)'}`,
+              boxShadow: active ? `0 2px 8px ${color}44` : 'none',
+            }}>
+              {e.charAt(0).toUpperCase() + e.slice(1)}
+            </button>
+          )
+        })}
       </div>
 
       {/* Table */}
