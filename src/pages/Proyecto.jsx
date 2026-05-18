@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, Legend,
 } from 'recharts'
 import { useData } from '../context/DataContext'
+import { getProjects, getSummaryByProject, getUserGroups } from '../lib/clockify'
 
 const MESES     = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
 const MESES_SHORT = ['E','F','M','A','M','J','J','A','S','O','N','D']
@@ -289,6 +290,9 @@ export default function Proyecto() {
         </div>
       )}
 
+      {/* Clockify group hours */}
+      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} anio={proyecto.anio} />
+
       {/* Monthly grid */}
       <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -354,6 +358,119 @@ export default function Proyecto() {
     </div>
   )
 }
+
+// ── Clockify helpers ──────────────────────────────────────────────────────────
+
+function fmtH(seconds) {
+  if (!seconds) return '0h'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function grpColor(name = '') {
+  const n = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
+}
+
+function ClockifyGroups({ codigoProyecto, anio }) {
+  const [state, setState] = useState('idle') // idle | loading | done | error | no-ws | no-match
+  const [groups, setGroups] = useState([])
+  const [totalSecs, setTotalSecs] = useState(0)
+
+  useEffect(() => {
+    const wsId = localStorage.getItem('clockify_ws')
+    if (!wsId) { setState('no-ws'); return }
+    load(wsId)
+  }, [codigoProyecto, anio]) // eslint-disable-line
+
+  async function load(wsId) {
+    setState('loading')
+    try {
+      const start = new Date(anio, 0, 1).toISOString()
+      const end   = new Date(anio, 11, 31, 23, 59, 59, 999).toISOString()
+      const [clockifyProjs, byProj, userGroupsData] = await Promise.all([
+        getProjects(wsId),
+        getSummaryByProject(wsId, start, end),
+        getUserGroups(wsId).catch(() => []),
+      ])
+      const cProj = clockifyProjs.find(p => p.name === codigoProyecto)
+      if (!cProj) { setState('no-match'); return }
+
+      const groupMap = {}
+      for (const g of (userGroupsData || [])) {
+        for (const uid of (g.userIds || [])) { if (!groupMap[uid]) groupMap[uid] = g.name }
+      }
+
+      const projSummary = (byProj.groupOne || []).find(p => p._id === cProj.id)
+      const acc = {}; let total = 0
+      for (const user of (projSummary?.children || [])) {
+        const grp = groupMap[user._id]; if (!grp) continue
+        acc[grp] = (acc[grp] || 0) + (user.duration || 0)
+        total += user.duration || 0
+      }
+      const result = Object.entries(acc)
+        .map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 }))
+        .sort((a, b) => b.duration - a.duration)
+      setGroups(result); setTotalSecs(total); setState('done')
+    } catch {
+      setState('error')
+    }
+  }
+
+  if (state === 'no-ws' || state === 'idle') return null
+
+  return (
+    <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
+        {state === 'done' && totalSecs > 0 && (
+          <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
+        )}
+      </div>
+
+      {state === 'loading' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text-3)', padding: '8px 0' }}>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: 12 }}>Cargando datos de Clockify…</span>
+        </div>
+      )}
+      {state === 'no-match' && (
+        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>No se encontró el proyecto en Clockify con código «{codigoProyecto}»</p>
+      )}
+      {state === 'error' && (
+        <p style={{ fontSize: 12, color: '#EF4444' }}>Error al conectar con Clockify</p>
+      )}
+      {state === 'done' && groups.length === 0 && (
+        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Sin horas registradas en este período</p>
+      )}
+      {state === 'done' && groups.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {groups.map(g => {
+            const gc = grpColor(g.name)
+            return (
+              <div key={g.name}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: gc, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-1)', flex: 1 }}>{g.name}</span>
+                  <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: gc }}>{g.pct.toFixed(1)}%</span>
+                  <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 48, textAlign: 'right' }}>{fmtH(g.duration)}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)', marginLeft: 18 }}>
+                  <div style={{ width: `${g.pct}%`, height: '100%', borderRadius: 3, background: gc, opacity: 0.75, transition: 'width 0.5s' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function CellInput({ value, color, onChange }) {
   const [focused, setFocused] = useState(false)
