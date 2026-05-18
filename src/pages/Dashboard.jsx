@@ -51,7 +51,8 @@ function BarEjec({ value }) {
 
 function fmtK(n) {
   if (!n || isNaN(n)) return '0'
-  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(Math.round(n))
+  if (Math.abs(n) >= 100000) return `${(n / 1000).toFixed(0)}k`
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(Math.round(n))
 }
 
 function exportCSV(rows, anio) {
@@ -93,8 +94,21 @@ export default function Dashboard() {
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
-  const responsables = useMemo(() => [...new Set(proyAnio.map(p => p.responsable_contrato).filter(Boolean))].sort(), [proyAnio])
-  const gestores     = useMemo(() => [...new Set(proyAnio.map(p => p.gestor_proyecto).filter(Boolean))].sort(),     [proyAnio])
+  // Dedup case-insensitive + trim para evitar duplicados por acentos/espacios
+  const responsables = useMemo(() => {
+    const seen = new Set()
+    return (vistaGlobal ? proyectos : proyAnio)
+      .map(p => p.responsable_contrato?.trim()).filter(Boolean)
+      .filter(r => { const k = r.toLowerCase(); return seen.has(k) ? false : (seen.add(k), true) })
+      .sort()
+  }, [vistaGlobal, proyectos, proyAnio]) // eslint-disable-line
+  const gestores = useMemo(() => {
+    const seen = new Set()
+    return (vistaGlobal ? proyectos : proyAnio)
+      .map(p => p.gestor_proyecto?.trim()).filter(Boolean)
+      .filter(r => { const k = r.toLowerCase(); return seen.has(k) ? false : (seen.add(k), true) })
+      .sort()
+  }, [vistaGlobal, proyectos, proyAnio]) // eslint-disable-line
 
   function kpis(id) {
     const e = entradas.filter(x => x.proyecto_id === id)
@@ -126,8 +140,8 @@ export default function Dashboard() {
       .filter(p => {
         const matchQ = !q || p.nombre_contrato.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.codigo_proyecto.toLowerCase().includes(q)
         const matchE = estadoFilter.size === 0 || estadoFilter.has(p.estado)
-        const matchR = !responsableFilter || p.responsable_contrato === responsableFilter
-        const matchG = !gestorFilter      || p.gestor_proyecto      === gestorFilter
+        const matchR = !responsableFilter || p.responsable_contrato?.trim().toLowerCase() === responsableFilter.toLowerCase()
+        const matchG = !gestorFilter      || p.gestor_proyecto?.trim().toLowerCase()      === gestorFilter.toLowerCase()
         return matchQ && matchE && matchR && matchG
       })
       .map(p => {
@@ -168,8 +182,8 @@ export default function Dashboard() {
       .filter(p => {
         const matchQ = !q || p.nombre_contrato.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q) || p.codigo_proyecto.toLowerCase().includes(q)
         const matchE = estadoFilter.size === 0 || estadoFilter.has(p.estado)
-        const matchR = !responsableFilter || p.responsable_contrato === responsableFilter
-        const matchG = !gestorFilter      || p.gestor_proyecto      === gestorFilter
+        const matchR = !responsableFilter || p.responsable_contrato?.trim().toLowerCase() === responsableFilter.toLowerCase()
+        const matchG = !gestorFilter      || p.gestor_proyecto?.trim().toLowerCase()      === gestorFilter.toLowerCase()
         return matchQ && matchE && matchR && matchG
       })
       .sort((a, b) => {
@@ -215,8 +229,15 @@ export default function Dashboard() {
     { label: 'Presupuesto total', value: fmt(totales.presupuesto),    color: '#7C4DFF' },
     { label: 'Facturación',       value: fmt(totales.facturacion),    sub: totales.presupuesto ? `${((totales.facturacion / totales.presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
     { label: 'Coste personal',    value: fmt(totales.coste_personal), sub: totales.facturacion ? `${((totales.coste_personal / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#6366F1' },
-    { label: 'Plan de medios',    value: fmt(totales.plan_medios),    color: '#EF4444' },
-    { label: 'Beneficio',         value: fmt(totales.beneficio),      sub: totales.facturacion ? `${((totales.beneficio / totales.facturacion) * 100).toFixed(1)}% ganancia` : null, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' },
+    { label: 'Producción',        value: fmt(totales.produccion),     sub: totales.facturacion ? `${((totales.produccion    / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
+    { label: 'Beneficio',         value: fmt(totales.beneficio),      sub: totales.facturacion ? `${((totales.beneficio     / totales.facturacion) * 100).toFixed(1)}% ganancia`  : null, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' },
+  ]
+
+  const subPills = [
+    { label: 'Plan de Medios',     value: totales.plan_medios,     color: '#EF4444',  real: true  },
+    { label: 'Gastos Personal',    value: totales.gastos_personal, color: '#8B5CF6',  real: true  },
+    { label: 'Campañas Digitales', value: null,                    color: '#06B6D4',  real: false },
+    { label: 'Audiovisual',        value: null,                    color: '#F97316',  real: false },
   ]
 
   const chartRows = [...activeRows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15)
@@ -250,12 +271,27 @@ export default function Dashboard() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 12 }}>
         {kpiCards.map(c => (
           <div key={c.label} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 12, padding: '16px 18px' }}>
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-3)', marginBottom: 6 }}>{c.label}</p>
             <p className="font-numeric" style={{ fontSize: 20, fontWeight: 700, color: c.color, letterSpacing: '-0.5px', marginBottom: c.sub ? 4 : 0 }}>{c.value}</p>
             {c.sub && <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>{c.sub}</p>}
+          </div>
+        ))}
+      </div>
+
+      {/* Sub-pills desglose producción */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Desglose</span>
+        {subPills.map(p => (
+          <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: `1px solid ${p.real ? 'var(--c-border)' : 'var(--c-border-light)'}`, borderRadius: 20, padding: '4px 12px', opacity: p.real ? 1 : 0.5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{p.label}</span>
+            {p.real
+              ? <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
+              : <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontStyle: 'italic' }}>próximamente</span>
+            }
           </div>
         ))}
       </div>
