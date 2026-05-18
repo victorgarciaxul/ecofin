@@ -688,7 +688,7 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
                                   <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>{fmtH(g.duration)}</span>
                                 </div>
                                 <div style={{ height: 4, borderRadius: 2, background: 'var(--c-border)' }}>
-                                  <div style={{ width: `${gPct}%`, height: '100%', borderRadius: 2, background: gc, opacity: noGroup ? 0.3 : 0.7, transition: 'width 0.5s' }} />
+                                  <div style={{ width: `${gPct}%`, height: '100%', borderRadius: 2, background: gc, opacity: 0.7, transition: 'width 0.5s' }} />
                                 </div>
                               </div>
                             )
