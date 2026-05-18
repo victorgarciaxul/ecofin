@@ -105,7 +105,7 @@ export default function AnalisisTrabajo() {
         getSummaryByProject(wsId, range.start, range.end),
         getSummaryByTask(wsId, range.start, range.end),
         getProjects(wsId),
-        getUserGroups(wsId).catch(() => []),
+        getUserGroups(wsId).catch(e => { console.warn('userGroups error:', e); return [] }),
       ])
       setByUser(userReport)
       setByProject(projectReport)
@@ -486,13 +486,15 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
     }
   }
 
+
   // For each project, aggregate hours by user group using byProject (PROJECT→USER breakdown)
   const groupsByProjectId = {}
   for (const proj of (byProject?.groupOne || [])) {
     if (!proj._id || proj._id === '000000000000000000000000') continue
     const acc = {}
     for (const user of (proj.children || [])) {
-      const grp = userGroupMap[user._id] || 'Sin grupo'
+      const grp = userGroupMap[user._id] || null
+      if (!grp) continue
       acc[grp] = (acc[grp] || 0) + (user.duration || 0)
     }
     groupsByProjectId[proj._id] = Object.entries(acc)
@@ -675,13 +677,12 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
                           {groups.map((g, gi) => {
                             const gPct = item.duration > 0 ? (g.duration / item.duration) * 100 : 0
                             const gc = groupColor(g.name)
-                            const noGroup = !g._id || !g.name || g.name === '(No group)'
                             return (
-                              <div key={g._id || gi}>
+                              <div key={g.name || gi}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                                   <span style={{ width: 7, height: 7, borderRadius: 2, background: gc, flexShrink: 0 }} />
-                                  <span style={{ fontSize: 11, color: noGroup ? 'var(--c-text-4)' : 'var(--c-text-2)', fontStyle: noGroup ? 'italic' : 'normal', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                                    {noGroup ? 'Sin grupo asignado' : g.name}
+                                  <span style={{ fontSize: 11, color: 'var(--c-text-2)', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                    {g.name}
                                   </span>
                                   <span className="font-numeric" style={{ fontSize: 11, fontWeight: 700, color: gc, flexShrink: 0 }}>{gPct.toFixed(1)}%</span>
                                   <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>{fmtH(g.duration)}</span>
