@@ -3,7 +3,7 @@ import {
   Users, LayoutGrid, BarChart2, RefreshCw, Sparkles,
   Copy, CheckCheck, X, AlertTriangle,
 } from 'lucide-react'
-import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getSummaryByGroup } from '../lib/clockify'
+import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getUserGroups } from '../lib/clockify'
 import { useData } from '../context/DataContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export default function AnalisisTrabajo() {
   const [byUser, setByUser]           = useState(null)
   const [byProject, setByProject]     = useState(null)
   const [byTask, setByTask]           = useState(null)
-  const [byGroup, setByGroup]         = useState(null)
+  const [userGroups, setUserGroups]   = useState([])
   const [projects, setProjects]       = useState([])
   const [lastRefresh, setLastRefresh] = useState(null)
 
@@ -100,18 +100,18 @@ export default function AnalisisTrabajo() {
     setLoading(true); setError(null)
     const range = getPeriodRange(period)
     try {
-      const [userReport, projectReport, taskReport, projs] = await Promise.all([
+      const [userReport, projectReport, taskReport, projs, groups] = await Promise.all([
         getSummaryByUser(wsId, range.start, range.end),
         getSummaryByProject(wsId, range.start, range.end),
         getSummaryByTask(wsId, range.start, range.end),
         getProjects(wsId),
+        getUserGroups(wsId).catch(() => []),
       ])
       setByUser(userReport)
       setByProject(projectReport)
       setByTask(taskReport)
       setProjects(projs)
-      // GROUP grouping is optional — silently skip if not supported by this workspace
-      getSummaryByGroup(wsId, range.start, range.end).then(setByGroup).catch(() => setByGroup(null))
+      setUserGroups(groups || [])
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message)
@@ -294,7 +294,7 @@ export default function AnalisisTrabajo() {
         <>
           {view === 'persona'  && <PersonaView  data={byUser}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
           {view === 'proyecto' && <ProyectoView data={byProject} projectColorMap={projectColorMap} />}
-          {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} byGroup={byGroup} proyectosEcofin={proyectosEcofin} />}
+          {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} byProject={byProject} userGroups={userGroups} proyectosEcofin={proyectosEcofin} />}
         </>
       )}
 
@@ -461,7 +461,7 @@ function groupColor(name = '') {
   return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
 }
 
-function GraficoView({ data, projectColorMap, totalSeconds, byGroup, proyectosEcofin }) {
+function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroups, proyectosEcofin }) {
   const [selected, setSelected] = useState(null)
 
   if (!data) return <Empty text="Sin datos para este período." />
@@ -478,13 +478,27 @@ function GraficoView({ data, projectColorMap, totalSeconds, byGroup, proyectosEc
     }
   }
 
-  // Map project ID → sorted groups from byGroup report
-  const groupsByProjectId = Object.fromEntries(
-    (byGroup?.groupOne || []).map(p => [
-      p._id,
-      (p.children || []).sort((a, b) => (b.duration || 0) - (a.duration || 0)),
-    ])
-  )
+  // Build userId → group name map from Clockify userGroups
+  const userGroupMap = {}
+  for (const g of (userGroups || [])) {
+    for (const uid of (g.userIds || [])) {
+      if (!userGroupMap[uid]) userGroupMap[uid] = g.name
+    }
+  }
+
+  // For each project, aggregate hours by user group using byProject (PROJECT→USER breakdown)
+  const groupsByProjectId = {}
+  for (const proj of (byProject?.groupOne || [])) {
+    if (!proj._id || proj._id === '000000000000000000000000') continue
+    const acc = {}
+    for (const user of (proj.children || [])) {
+      const grp = userGroupMap[user._id] || 'Sin grupo'
+      acc[grp] = (acc[grp] || 0) + (user.duration || 0)
+    }
+    groupsByProjectId[proj._id] = Object.entries(acc)
+      .map(([name, duration]) => ({ name, duration }))
+      .sort((a, b) => b.duration - a.duration)
+  }
 
   const items = projs
     .map((p, idx) => ({
