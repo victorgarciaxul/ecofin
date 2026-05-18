@@ -142,7 +142,7 @@ export default function Proyecto() {
   const badge = ESTADO_MAP[proyecto.estado] || ESTADO_MAP.activo
 
   const kpiCards = [
-    { label: 'Presupuesto',    value: fmt(presupuesto),    color: '#7C4DFF' },
+    { label: 'Previsión anual', value: fmt(presupuesto),    color: '#7C4DFF' },
     { label: 'Facturación',    value: fmt(facturacion),    sub: presupuesto ? `${((facturacion / presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
     { label: 'Coste Personal', value: fmt(coste_personal), sub: facturacion ? `${((coste_personal / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#7C4DFF' },
     { label: 'Producción',     value: fmt(produccion),     sub: facturacion ? `${((produccion / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
@@ -200,7 +200,7 @@ export default function Proyecto() {
                 </label>
               ))}
               <label>
-                <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>Presupuesto base (€)</span>
+                <span style={{ fontSize: 11, color: 'var(--c-text-3)', display: 'block', marginBottom: 4 }}>Previsión base (€)</span>
                 <input type="number" value={headerForm.presupuesto_base || ''} onChange={e => setHeaderForm(f => ({ ...f, presupuesto_base: e.target.value }))}
                   style={{ width: '100%', padding: '7px 10px', borderRadius: 7, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, boxSizing: 'border-box', fontFamily: 'Space Grotesk, sans-serif' }} />
               </label>

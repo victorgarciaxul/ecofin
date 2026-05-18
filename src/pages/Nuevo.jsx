@@ -85,7 +85,7 @@ export default function Nuevo() {
           </div>
 
           <div style={{ borderTop: '1px solid var(--c-border)', paddingTop: 18 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginBottom: 14 }}>Presupuesto</p>
+            <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginBottom: 14 }}>Previsión anual</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-text-2)', display: 'block', marginBottom: 6 }}>Año</label>
@@ -93,7 +93,7 @@ export default function Nuevo() {
                   {[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
-              {inp('Presupuesto base (€)', 'presupuesto_base', 'number', '0')}
+              {inp('Previsión base (€)', 'presupuesto_base', 'number', '0')}
               {inp('Ampliaciones (€)', 'ampliaciones', 'number', '0')}
             </div>
           </div>

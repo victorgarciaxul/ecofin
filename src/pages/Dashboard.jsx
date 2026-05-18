@@ -56,7 +56,7 @@ function fmtK(n) {
 }
 
 function exportCSV(rows, anio) {
-  const headers = ['Código','Contrato','Cliente','Responsable','Gestor','Estado','Presupuesto','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
+  const headers = ['Código','Contrato','Cliente','Responsable','Gestor','Estado','Previsión anual','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
   const pct = (num, den) => den ? ((num / den) * 100).toFixed(2) + '%' : '—'
   const lines = rows.map(p => [
     p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`,
@@ -226,7 +226,7 @@ export default function Dashboard() {
   )
 
   const kpiCards = [
-    { label: 'Presupuesto total', value: fmt(totales.presupuesto),    color: '#7C4DFF' },
+    { label: 'Previsión anual',   value: fmt(totales.presupuesto),    color: '#7C4DFF' },
     { label: 'Facturación',       value: fmt(totales.facturacion),    sub: totales.presupuesto ? `${((totales.facturacion / totales.presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
     { label: 'Coste personal',    value: fmt(totales.coste_personal), sub: totales.facturacion ? `${((totales.coste_personal / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#6366F1' },
     { label: 'Producción',        value: fmt(totales.produccion),     sub: totales.facturacion ? `${((totales.produccion    / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
@@ -408,7 +408,7 @@ export default function Dashboard() {
                   <TH label="Responsable"  col="responsable_contrato" align="left" minW={120} />
                   <TH label="Gestor"       col="gestor_proyecto"      align="left" minW={120} />
                   <TH label="Estado"       col={null}                 align="center" minW={90} />
-                  <TH label="Presupuesto" col="presupuesto"     minW={120} />
+                  <TH label="Previsión"   col="presupuesto"     minW={120} />
                   <TH label="Facturado"   col="facturacion"     minW={120} />
                   <TH label="% Ejec."     col="ejec"            minW={110} />
                   <TH label="Coste Pers." col="coste_personal"  minW={120} />

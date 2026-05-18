@@ -195,7 +195,7 @@ export default function Proyectos() {
               )}
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Presupuesto</span>
+                <span style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Previsión anual</span>
                 <span className="font-numeric" style={{ fontSize: 12, fontWeight: 600, color: 'var(--c-text-1)' }}>{fmt(pres)}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: pres > 0 ? 10 : 0 }}>
