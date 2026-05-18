@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, Edit2, Check, X, Trash2 } from 'lucide-react'
 import {
@@ -354,7 +354,7 @@ export default function Proyecto() {
       </div>
 
       {/* Clockify group hours */}
-      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} nombreContrato={proyecto.nombre_contrato} anio={proyecto.anio} />
+      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} anio={proyecto.anio} />
 
     </div>
   )
@@ -378,21 +378,22 @@ function grpColor(name = '') {
 
 function ClockifyGroups({ codigoProyecto, anio }) {
   const storageKey = `clockify_link_${codigoProyecto}`
-  const [state, setState]             = useState('idle')
-  const [groups, setGroups]           = useState([])
-  const [totalSecs, setTotalSecs]     = useState(0)
-  const [allProjs, setAllProjs]       = useState([])   // {id, name}
-  const [linkedId, setLinkedId]       = useState(() => localStorage.getItem(storageKey) || '')
-  const [picking, setPicking]         = useState(false)
+  const [loading, setLoading]     = useState(true)
+  const [groups, setGroups]       = useState([])
+  const [totalSecs, setTotalSecs] = useState(0)
+  const [allProjs, setAllProjs]   = useState([])
+  const [linkedId, setLinkedId]   = useState(() => localStorage.getItem(storageKey) || '')
+  const [error, setError]         = useState(null)
 
-  useEffect(() => {
+  // Cached data from the initial fetch so re-selecting doesn't re-fetch
+  const cacheRef = useRef({ byProj: null, userGroupsData: null, clockifyProjs: [] })
+
+  useEffect(() => { fetchAll() }, [codigoProyecto, anio]) // eslint-disable-line
+
+  async function fetchAll() {
     const wsId = localStorage.getItem('clockify_ws')
-    if (!wsId) { setState('no-ws'); return }
-    init(wsId)
-  }, [codigoProyecto, anio]) // eslint-disable-line
-
-  async function init(wsId) {
-    setState('loading')
+    if (!wsId) { setLoading(false); return }
+    setLoading(true); setError(null)
     try {
       const start = new Date(anio, 0, 1).toISOString()
       const end   = new Date(anio, 11, 31, 23, 59, 59, 999).toISOString()
@@ -401,24 +402,26 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         getSummaryByProject(wsId, start, end),
         getUserGroups(wsId).catch(() => []),
       ])
-      const sorted = [...clockifyProjs].sort((a, b) => a.name.localeCompare(b.name))
-      setAllProjs(sorted)
+      cacheRef.current = { byProj, userGroupsData, clockifyProjs }
+      setAllProjs([...clockifyProjs].sort((a, b) => a.name.localeCompare(b.name)))
 
       const savedId = localStorage.getItem(storageKey)
-      const cProj   = savedId ? clockifyProjs.find(p => p.id === savedId) : null
-      if (!cProj) { setState('unlinked'); return }
-
-      await loadGroups(cProj, byProj, userGroupsData)
-    } catch {
-      setState('error')
+      if (savedId) computeGroups(savedId, clockifyProjs, byProj, userGroupsData)
+    } catch (e) {
+      setError(e.message)
     }
+    setLoading(false)
   }
 
-  async function loadGroups(cProj, byProj, userGroupsData) {
+  function computeGroups(projId, clockifyProjs, byProj, userGroupsData) {
+    const cProj = clockifyProjs.find(p => p.id === projId)
+    if (!cProj) return
+
     const groupMap = {}
-    for (const g of (userGroupsData || [])) {
-      for (const uid of (g.userIds || [])) { if (!groupMap[uid]) groupMap[uid] = g.name }
-    }
+    for (const g of (userGroupsData || []))
+      for (const uid of (g.userIds || []))
+        if (!groupMap[uid]) groupMap[uid] = g.name
+
     const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
     const acc = {}; let total = 0
     for (const user of (projSummary?.children || [])) {
@@ -426,64 +429,65 @@ function ClockifyGroups({ codigoProyecto, anio }) {
       acc[grp] = (acc[grp] || 0) + (user.duration || 0)
       total += user.duration || 0
     }
-    const result = Object.entries(acc)
-      .map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 }))
-      .sort((a, b) => b.duration - a.duration)
-    setGroups(result); setTotalSecs(total); setState('done')
+    setGroups(Object.entries(acc).map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
+    setTotalSecs(total)
   }
 
-  function selectProject(id) {
+  function handleSelect(id) {
+    if (!id) return
     localStorage.setItem(storageKey, id)
     setLinkedId(id)
-    setPicking(false)
-    setState('idle')
-    const wsId = localStorage.getItem('clockify_ws')
-    if (wsId) init(wsId)
+    const { byProj, userGroupsData, clockifyProjs } = cacheRef.current
+    computeGroups(id, clockifyProjs, byProj, userGroupsData)
   }
 
-  if (state === 'no-ws' || state === 'idle') return null
+  function handleClear() {
+    localStorage.removeItem(storageKey)
+    setLinkedId(''); setGroups([]); setTotalSecs(0)
+  }
+
+  const linkedName = linkedId ? allProjs.find(p => p.id === linkedId)?.name : null
 
   return (
     <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {state === 'done' && totalSecs > 0 && (
-            <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
-          )}
-          {allProjs.length > 0 && (
-            <button onClick={() => setPicking(v => !v)} style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--c-border)', background: 'var(--c-bg-muted)', color: 'var(--c-text-3)', cursor: 'pointer' }}>
-              {state === 'done' ? '✎ Cambiar' : 'Vincular proyecto Clockify'}
-            </button>
-          )}
-        </div>
+        {groups.length > 0 && totalSecs > 0 && (
+          <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
+        )}
       </div>
 
-      {picking && (
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 12, color: 'var(--c-text-3)', marginBottom: 8 }}>Selecciona el proyecto de Clockify correspondiente:</p>
-          <select onChange={e => selectProject(e.target.value)} defaultValue=""
-            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, cursor: 'pointer' }}>
-            <option value="" disabled>— Elige un proyecto —</option>
-            {allProjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
+      {/* Selector — always visible */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <span style={{ fontSize: 12, color: 'var(--c-text-3)', flexShrink: 0 }}>Proyecto Clockify:</span>
+        {loading ? (
+          <span style={{ fontSize: 12, color: 'var(--c-text-4)' }}>Cargando…</span>
+        ) : (
+          <>
+            <select value={linkedId} onChange={e => handleSelect(e.target.value)}
+              style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 12, cursor: 'pointer' }}>
+              <option value="">— Seleccionar —</option>
+              {allProjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+            {linkedId && (
+              <button onClick={handleClear} title="Desvincular"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', fontSize: 14, padding: 2 }}>✕</button>
+            )}
+          </>
+        )}
+      </div>
+
+      {error && <p style={{ fontSize: 12, color: '#EF4444' }}>Error: {error}</p>}
+
+      {!linkedId && !loading && (
+        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Selecciona el proyecto de Clockify para ver el desglose por grupo</p>
       )}
 
-      {state === 'loading' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text-3)', padding: '8px 0' }}>
-          <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-          <span style={{ fontSize: 12 }}>Cargando datos de Clockify…</span>
-        </div>
+      {linkedId && groups.length === 0 && !loading && (
+        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Sin horas registradas para este proyecto en {anio}</p>
       )}
-      {state === 'unlinked' && !picking && (
-        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Pulsa «Vincular proyecto Clockify» para conectar este proyecto con Clockify</p>
-      )}
-      {state === 'error' && <p style={{ fontSize: 12, color: '#EF4444' }}>Error al conectar con Clockify</p>}
-      {state === 'done' && groups.length === 0 && (
-        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Sin horas registradas en este período</p>
-      )}
-      {state === 'done' && groups.length > 0 && (
+
+      {groups.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {groups.map(g => {
             const gc = grpColor(g.name)
