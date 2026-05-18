@@ -290,9 +290,6 @@ export default function Proyecto() {
         </div>
       )}
 
-      {/* Clockify group hours */}
-      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} anio={proyecto.anio} />
-
       {/* Monthly grid */}
       <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -355,6 +352,10 @@ export default function Proyecto() {
           </table>
         </div>
       </div>
+
+      {/* Clockify group hours */}
+      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} nombreContrato={proyecto.nombre_contrato} anio={proyecto.anio} />
+
     </div>
   )
 }
@@ -375,7 +376,7 @@ function grpColor(name = '') {
   return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
 }
 
-function ClockifyGroups({ codigoProyecto, anio }) {
+function ClockifyGroups({ codigoProyecto, nombreContrato, anio }) {
   const [state, setState] = useState('idle') // idle | loading | done | error | no-ws | no-match
   const [groups, setGroups] = useState([])
   const [totalSecs, setTotalSecs] = useState(0)
@@ -396,7 +397,13 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         getSummaryByProject(wsId, start, end),
         getUserGroups(wsId).catch(() => []),
       ])
-      const cProj = clockifyProjs.find(p => p.name === codigoProyecto)
+      // Match by exact code, by full name, or by the code appearing at the start of the Clockify name
+      const cProj = clockifyProjs.find(p =>
+        p.name === codigoProyecto ||
+        p.name === nombreContrato ||
+        p.name.startsWith(codigoProyecto) ||
+        (nombreContrato && p.name.toLowerCase().includes(nombreContrato.toLowerCase().slice(0, 15)))
+      )
       if (!cProj) { setState('no-match'); return }
 
       const groupMap = {}
@@ -423,7 +430,7 @@ function ClockifyGroups({ codigoProyecto, anio }) {
   if (state === 'no-ws' || state === 'idle') return null
 
   return (
-    <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginBottom: 24 }}>
+    <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
         {state === 'done' && totalSecs > 0 && (
@@ -438,7 +445,7 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         </div>
       )}
       {state === 'no-match' && (
-        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>No se encontró el proyecto en Clockify con código «{codigoProyecto}»</p>
+        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>No se encontró «{codigoProyecto}» en Clockify</p>
       )}
       {state === 'error' && (
         <p style={{ fontSize: 12, color: '#EF4444' }}>Error al conectar con Clockify</p>
