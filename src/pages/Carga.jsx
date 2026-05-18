@@ -100,18 +100,18 @@ export default function AnalisisTrabajo() {
     setLoading(true); setError(null)
     const range = getPeriodRange(period)
     try {
-      const [userReport, projectReport, taskReport, groupReport, projs] = await Promise.all([
+      const [userReport, projectReport, taskReport, projs] = await Promise.all([
         getSummaryByUser(wsId, range.start, range.end),
         getSummaryByProject(wsId, range.start, range.end),
         getSummaryByTask(wsId, range.start, range.end),
-        getSummaryByGroup(wsId, range.start, range.end),
         getProjects(wsId),
       ])
       setByUser(userReport)
       setByProject(projectReport)
       setByTask(taskReport)
-      setByGroup(groupReport)
       setProjects(projs)
+      // GROUP grouping is optional — silently skip if not supported by this workspace
+      getSummaryByGroup(wsId, range.start, range.end).then(setByGroup).catch(() => setByGroup(null))
       setLastRefresh(new Date())
     } catch (e) {
       setError(e.message)
