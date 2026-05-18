@@ -39,3 +39,4 @@ function summaryReport(wid, start, end, groups) {
 export const getSummaryByUser    = (wid, s, e) => summaryReport(wid, s, e, ['USER',    'PROJECT'])
 export const getSummaryByProject = (wid, s, e) => summaryReport(wid, s, e, ['PROJECT', 'USER'])
 export const getSummaryByTask    = (wid, s, e) => summaryReport(wid, s, e, ['PROJECT', 'TASK'])
+export const getSummaryByGroup   = (wid, s, e) => summaryReport(wid, s, e, ['PROJECT', 'GROUP'])

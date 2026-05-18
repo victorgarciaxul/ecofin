@@ -3,7 +3,8 @@ import {
   Users, LayoutGrid, BarChart2, RefreshCw, Sparkles,
   Copy, CheckCheck, X, AlertTriangle,
 } from 'lucide-react'
-import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask } from '../lib/clockify'
+import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getSummaryByGroup } from '../lib/clockify'
+import { useData } from '../context/DataContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,8 +65,11 @@ export default function AnalisisTrabajo() {
   const [byUser, setByUser]           = useState(null)
   const [byProject, setByProject]     = useState(null)
   const [byTask, setByTask]           = useState(null)
+  const [byGroup, setByGroup]         = useState(null)
   const [projects, setProjects]       = useState([])
   const [lastRefresh, setLastRefresh] = useState(null)
+
+  const { proyectos: proyectosEcofin } = useData()
 
   // AI
   const [showAnalysis, setShowAnalysis]       = useState(false)
@@ -96,15 +100,17 @@ export default function AnalisisTrabajo() {
     setLoading(true); setError(null)
     const range = getPeriodRange(period)
     try {
-      const [userReport, projectReport, taskReport, projs] = await Promise.all([
+      const [userReport, projectReport, taskReport, groupReport, projs] = await Promise.all([
         getSummaryByUser(wsId, range.start, range.end),
         getSummaryByProject(wsId, range.start, range.end),
         getSummaryByTask(wsId, range.start, range.end),
+        getSummaryByGroup(wsId, range.start, range.end),
         getProjects(wsId),
       ])
       setByUser(userReport)
       setByProject(projectReport)
       setByTask(taskReport)
+      setByGroup(groupReport)
       setProjects(projs)
       setLastRefresh(new Date())
     } catch (e) {
@@ -288,7 +294,7 @@ export default function AnalisisTrabajo() {
         <>
           {view === 'persona'  && <PersonaView  data={byUser}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
           {view === 'proyecto' && <ProyectoView data={byProject} projectColorMap={projectColorMap} />}
-          {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
+          {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} byGroup={byGroup} proyectosEcofin={proyectosEcofin} />}
         </>
       )}
 
@@ -450,7 +456,12 @@ function ProyectoView({ data, projectColorMap }) {
 
 // ── Vista gráficos ─────────────────────────────────────────────────────────────
 
-function GraficoView({ data, projectColorMap, totalSeconds }) {
+function groupColor(name = '') {
+  const n = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
+}
+
+function GraficoView({ data, projectColorMap, totalSeconds, byGroup, proyectosEcofin }) {
   const [selected, setSelected] = useState(null)
 
   if (!data) return <Empty text="Sin datos para este período." />
@@ -459,14 +470,30 @@ function GraficoView({ data, projectColorMap, totalSeconds }) {
 
   const totalProj = projs.reduce((s, p) => s + (p.duration || 0), 0)
 
+  // Map codigo_proyecto → nombre_contrato from EcoFin DB
+  const ecofinNameMap = {}
+  for (const p of (proyectosEcofin || [])) {
+    if (p.codigo_proyecto && !ecofinNameMap[p.codigo_proyecto]) {
+      ecofinNameMap[p.codigo_proyecto] = p.nombre_contrato
+    }
+  }
+
+  // Map project ID → sorted groups from byGroup report
+  const groupsByProjectId = Object.fromEntries(
+    (byGroup?.groupOne || []).map(p => [
+      p._id,
+      (p.children || []).sort((a, b) => (b.duration || 0) - (a.duration || 0)),
+    ])
+  )
+
   const items = projs
     .map((p, idx) => ({
-      name: p.name,
+      clockifyName: p.name,
+      name: ecofinNameMap[p.name] || p.name,
       duration: p.duration || 0,
       pct: totalProj > 0 ? (p.duration / totalProj) * 100 : 0,
       id: p._id,
       color: projectColorMap[p._id] || `hsl(${(idx * 67 + 197) % 360},60%,52%)`,
-      tasks: (p.children || []).sort((a, b) => (b.duration || 0) - (a.duration || 0)),
     }))
     .sort((a, b) => b.duration - a.duration)
 
@@ -570,16 +597,18 @@ function GraficoView({ data, projectColorMap, totalSeconds }) {
           </div>
         </div>
 
-        {/* Projects + tasks list */}
+        {/* Projects + groups list */}
         <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-text-2)' }}>Proyectos y tareas</p>
-            <p style={{ fontSize: 11, color: 'var(--c-text-4)' }}>Clic para expandir tareas</p>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--c-text-2)' }}>Proyectos y grupos</p>
+            <p style={{ fontSize: 11, color: 'var(--c-text-4)' }}>Clic para expandir grupos</p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {items.map((item, idx) => {
               const isOpen = selected === item.id
+              const groups = groupsByProjectId[item.id] || []
+
               return (
                 <div key={item.id} style={{ borderBottom: idx < items.length - 1 ? '1px solid var(--c-border-light)' : 'none' }}>
 
@@ -600,32 +629,51 @@ function GraficoView({ data, projectColorMap, totalSeconds }) {
                       <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', flexShrink: 0, minWidth: 40, textAlign: 'right' }}>{fmtH(item.duration)}</span>
                       <span style={{ fontSize: 10, color: 'var(--c-text-4)', marginLeft: 4, flexShrink: 0 }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
-                    <div style={{ height: 5, borderRadius: 3, background: 'var(--c-border)', marginLeft: 19 }}>
+                    {/* Group pills inline */}
+                    {groups.length > 0 && (
+                      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginLeft: 19, marginTop: 2 }}>
+                        {groups.slice(0, 5).map((g, gi) => {
+                          const gPct = item.duration > 0 ? (g.duration / item.duration) * 100 : 0
+                          const gc = groupColor(g.name)
+                          return (
+                            <span key={g._id || gi} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 5, background: gc + '22', color: gc, border: `1px solid ${gc}44`, whiteSpace: 'nowrap' }}>
+                              {g.name} · {gPct.toFixed(0)}%
+                            </span>
+                          )
+                        })}
+                        {groups.length > 5 && (
+                          <span style={{ fontSize: 10, color: 'var(--c-text-4)', alignSelf: 'center' }}>+{groups.length - 5}</span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ height: 5, borderRadius: 3, background: 'var(--c-border)', marginLeft: 19, marginTop: 7 }}>
                       <div style={{ width: `${item.pct}%`, height: '100%', borderRadius: 3, background: item.color, transition: 'width 0.6s cubic-bezier(.4,0,.2,1)', opacity: 0.85 }} />
                     </div>
                   </div>
 
-                  {/* Task breakdown — inline expand */}
+                  {/* Group breakdown — inline expand */}
                   {isOpen && (
                     <div style={{ padding: '10px 20px 16px 42px', background: item.color + '07', borderTop: `1px solid ${item.color}22` }}>
-                      {item.tasks.length === 0 ? (
-                        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic', padding: '6px 0' }}>Sin tareas registradas en Clockify</p>
+                      {groups.length === 0 ? (
+                        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic', padding: '6px 0' }}>Sin grupos registrados en Clockify</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                          {item.tasks.map((task, ti) => {
-                            const tPct = item.duration > 0 ? (task.duration / item.duration) * 100 : 0
-                            const noTask = !task._id || !task.name || task.name === '(No task)'
+                          {groups.map((g, gi) => {
+                            const gPct = item.duration > 0 ? (g.duration / item.duration) * 100 : 0
+                            const gc = groupColor(g.name)
+                            const noGroup = !g._id || !g.name || g.name === '(No group)'
                             return (
-                              <div key={task._id || ti}>
+                              <div key={g._id || gi}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                                  <span style={{ fontSize: 11, color: noTask ? 'var(--c-text-4)' : 'var(--c-text-2)', fontStyle: noTask ? 'italic' : 'normal', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                                    {noTask ? 'Sin tarea asignada' : task.name}
+                                  <span style={{ width: 7, height: 7, borderRadius: 2, background: gc, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 11, color: noGroup ? 'var(--c-text-4)' : 'var(--c-text-2)', fontStyle: noGroup ? 'italic' : 'normal', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                                    {noGroup ? 'Sin grupo asignado' : g.name}
                                   </span>
-                                  <span className="font-numeric" style={{ fontSize: 11, fontWeight: 700, color: item.color, flexShrink: 0 }}>{tPct.toFixed(1)}%</span>
-                                  <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>{fmtH(task.duration)}</span>
+                                  <span className="font-numeric" style={{ fontSize: 11, fontWeight: 700, color: gc, flexShrink: 0 }}>{gPct.toFixed(1)}%</span>
+                                  <span className="font-numeric" style={{ fontSize: 11, color: 'var(--c-text-3)', flexShrink: 0, minWidth: 36, textAlign: 'right' }}>{fmtH(g.duration)}</span>
                                 </div>
                                 <div style={{ height: 4, borderRadius: 2, background: 'var(--c-border)' }}>
-                                  <div style={{ width: `${tPct}%`, height: '100%', borderRadius: 2, background: item.color, opacity: noTask ? 0.3 : 0.65, transition: 'width 0.5s' }} />
+                                  <div style={{ width: `${gPct}%`, height: '100%', borderRadius: 2, background: gc, opacity: noGroup ? 0.3 : 0.7, transition: 'width 0.5s' }} />
                                 </div>
                               </div>
                             )
