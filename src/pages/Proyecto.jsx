@@ -354,7 +354,7 @@ export default function Proyecto() {
       </div>
 
       {/* Clockify group hours */}
-      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} anio={proyecto.anio} />
+      <ClockifyGroups codigoProyecto={proyecto.codigo_proyecto} nombreContrato={proyecto.nombre_contrato} anio={proyecto.anio} />
 
     </div>
   )
@@ -376,20 +376,22 @@ function grpColor(name = '') {
   return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
 }
 
-function ClockifyGroups({ codigoProyecto, anio }) {
+function ClockifyGroups({ codigoProyecto, nombreContrato, anio }) {
   const [loading, setLoading]     = useState(true)
   const [groups, setGroups]       = useState([])
   const [totalSecs, setTotalSecs] = useState(0)
+  const [matchedName, setMatchedName] = useState('')
   const [error, setError]         = useState(null)
+  const [debug, setDebug]         = useState('')
 
   useEffect(() => {
     const wsId = localStorage.getItem('clockify_ws')
-    if (!wsId) { setLoading(false); return }
+    if (!wsId) { setLoading(false); setDebug('No clockify_ws en localStorage'); return }
     fetchGroups(wsId)
-  }, [codigoProyecto, anio]) // eslint-disable-line
+  }, [codigoProyecto, nombreContrato, anio]) // eslint-disable-line
 
   async function fetchGroups(wsId) {
-    setLoading(true); setError(null)
+    setLoading(true); setError(null); setDebug('')
     try {
       const start = new Date(anio, 0, 1).toISOString()
       const end   = new Date(anio, 11, 31, 23, 59, 59, 999).toISOString()
@@ -398,9 +400,23 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         getSummaryByProject(wsId, start, end),
         getUserGroups(wsId).catch(() => []),
       ])
-      // Auto-match: find Clockify project whose name matches the project code
-      const cProj = clockifyProjs.find(p => p.name === codigoProyecto)
-      if (!cProj) { setGroups([]); setLoading(false); return }
+
+      // Auto-match: try codigo_proyecto first, then nombre_contrato, then partial/case-insensitive
+      const code = (codigoProyecto || '').trim().toLowerCase()
+      const name = (nombreContrato || '').trim().toLowerCase()
+      let cProj = clockifyProjs.find(p => p.name.trim() === codigoProyecto?.trim())
+               || clockifyProjs.find(p => p.name.trim() === nombreContrato?.trim())
+               || clockifyProjs.find(p => p.name.trim().toLowerCase() === code)
+               || clockifyProjs.find(p => p.name.trim().toLowerCase() === name)
+               || clockifyProjs.find(p => code && p.name.toLowerCase().includes(code))
+               || clockifyProjs.find(p => name && p.name.toLowerCase().includes(name))
+
+      if (!cProj) {
+        const projNames = clockifyProjs.map(p => p.name).slice(0, 10).join(', ')
+        setDebug(`No match. Código: "${codigoProyecto}" · Nombre: "${nombreContrato}" · Clockify proyectos: [${projNames}…]`)
+        setGroups([]); setLoading(false); return
+      }
+      setMatchedName(cProj.name)
 
       const groupMap = {}
       for (const g of (userGroupsData || []))
@@ -408,6 +424,10 @@ function ClockifyGroups({ codigoProyecto, anio }) {
           if (!groupMap[uid]) groupMap[uid] = g.name
 
       const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
+      if (!projSummary) {
+        setDebug(`Proyecto "${cProj.name}" encontrado pero sin horas en ${anio}`)
+        setGroups([]); setLoading(false); return
+      }
       const acc = {}; let total = 0
       for (const user of (projSummary?.children || [])) {
         const grp = groupMap[user._id]
@@ -415,22 +435,29 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         acc[grp] = (acc[grp] || 0) + (user.duration || 0)
         total += user.duration || 0
       }
-      setGroups(Object.entries(acc).map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
+      if (total === 0) {
+        setDebug(`Proyecto "${cProj.name}" tiene ${projSummary.children?.length || 0} usuarios pero ninguno está en un grupo`)
+      }
+      setGroups(Object.entries(acc).map(([gname, duration]) => ({ name: gname, duration, pct: total > 0 ? (duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
       setTotalSecs(total)
     } catch (e) { setError(e.message) }
     setLoading(false)
   }
 
-  if (!loading && groups.length === 0 && !error) return null
-
   return (
     <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
+        <div>
+          <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
+          {matchedName && <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 2 }}>Clockify: {matchedName}</p>}
+        </div>
         {totalSecs > 0 && (
           <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
         )}
       </div>
+
+      {/* Debug temporal — quitar cuando funcione */}
+      {debug && <p style={{ fontSize: 11, color: '#F59E0B', background: '#F59E0B15', padding: '8px 12px', borderRadius: 8, marginBottom: 10, wordBreak: 'break-all' }}>🔍 {debug}</p>}
 
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text-3)', padding: '8px 0' }}>
