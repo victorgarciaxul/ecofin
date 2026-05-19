@@ -284,16 +284,22 @@ export default function Dashboard() {
       {/* Sub-pills desglose producción */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Desglose</span>
-        {subPills.map(p => (
-          <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: `1px solid ${p.real ? 'var(--c-border)' : 'var(--c-border-light)'}`, borderRadius: 20, padding: '4px 12px', opacity: p.real ? 1 : 0.5 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{p.label}</span>
-            {p.real
-              ? <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
-              : <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontStyle: 'italic' }}>próximamente</span>
-            }
-          </div>
-        ))}
+        {subPills.map(p => {
+          const pct = p.real && totales.facturacion ? ((p.value / totales.facturacion) * 100).toFixed(1) : null
+          return (
+            <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: `1px solid ${p.real ? 'var(--c-border)' : 'var(--c-border-light)'}`, borderRadius: 20, padding: '4px 12px', opacity: p.real ? 1 : 0.5 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{p.label}</span>
+              {p.real
+                ? <>
+                    <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
+                    {pct && <span className="font-numeric" style={{ fontSize: 10, fontWeight: 600, color: p.color, opacity: 0.7 }}>({pct}%)</span>}
+                  </>
+                : <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontStyle: 'italic' }}>próximamente</span>
+              }
+            </div>
+          )
+        })}
       </div>
 
       {/* Overview chart */}
