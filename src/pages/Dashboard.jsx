@@ -371,37 +371,67 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Overview chart */}
-      {showChart && chartRows.length > 0 && (
-        <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
-          <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)', marginBottom: 4 }}>Rentabilidad por proyecto</p>
-          <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 16 }}>Facturación y beneficio · {anio}</p>
-          <ResponsiveContainer width="100%" height={220}>
+      {/* Overview chart — horizontal bars, two columns */}
+      {showChart && chartRows.length > 0 && (() => {
+        const chartDataAll = chartRows.map(r => ({
+          name: r.nombre_contrato.length > 22 ? r.nombre_contrato.slice(0, 20) + '…' : r.nombre_contrato,
+          fullName: r.nombre_contrato,
+          facturacion: r.facturacion,
+          beneficio: r.beneficio,
+        }))
+        const mid = Math.ceil(chartDataAll.length / 2)
+        const col1 = chartDataAll.slice(0, mid)
+        const col2 = chartDataAll.slice(mid)
+        const rowH = 36
+        const chartH = (h) => Math.max(180, h.length * rowH + 40)
+
+        const renderChart = (data) => (
+          <ResponsiveContainer width="100%" height={chartH(data)}>
             <BarChart
-              data={chartRows.map(r => ({ name: r.nombre_contrato, facturacion: r.facturacion, beneficio: r.beneficio }))}
-              barCategoryGap="25%" barGap={4}
-              margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+              data={data} layout="vertical"
+              barCategoryGap="20%" barGap={2}
+              margin={{ top: 4, right: 12, left: 4, bottom: 0 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" horizontal={false} />
+              <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10, fill: 'var(--c-text-2)', fontFamily: 'Poppins' }} axisLine={false} tickLine={false} />
+              <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
               <Tooltip
-                formatter={(v, name) => [
+                formatter={(v, label) => [
                   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v),
-                  name,
+                  label,
                 ]}
+                labelFormatter={(label) => { const d = data.find(x => x.name === label); return d?.fullName || label }}
                 labelStyle={{ fontWeight: 700, color: 'var(--c-text-1)', marginBottom: 4 }}
                 contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk', background: 'var(--c-bg-surface)' }}
               />
-              <ReferenceLine y={0} stroke="var(--c-border)" />
-              <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[3,3,0,0]} maxBarSize={28} />
-              <Bar dataKey="beneficio"   name="Beneficio"   radius={[3,3,0,0]} maxBarSize={28}>
-                {chartRows.map((r, i) => <Cell key={i} fill={r.beneficio >= 0 ? '#06B6D4' : '#EF4444'} />)}
+              <ReferenceLine x={0} stroke="var(--c-border)" />
+              <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[0,3,3,0]} maxBarSize={16} />
+              <Bar dataKey="beneficio" name="Beneficio" radius={[0,3,3,0]} maxBarSize={16}>
+                {data.map((r, i) => <Cell key={i} fill={r.beneficio >= 0 ? '#06B6D4' : '#EF4444'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
-      )}
+        )
+
+        return (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Rentabilidad por proyecto</p>
+              <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Facturación y beneficio · {chartRows.length} proyectos · {vistaGlobal ? 'global' : anio}</p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: col2.length > 0 ? '1fr 1fr' : '1fr', gap: 14 }}>
+              <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '16px 12px' }}>
+                {renderChart(col1)}
+              </div>
+              {col2.length > 0 && (
+                <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '16px 12px' }}>
+                  {renderChart(col2)}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
