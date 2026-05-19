@@ -132,6 +132,15 @@ export default function Dashboard() {
         const clockifyNameMap = {}
         for (const cp of clockifyProjs) clockifyNameMap[cp.id] = cp.name
 
+        // Debug: log matching
+        const allProjNames = (byProj?.groupOne || []).map(p => clockifyNameMap[p._id] || p.name || p._id)
+        const matched = allProjNames.filter(n => ecofinCodes.has(n) || extraNames.includes(n.toLowerCase()))
+        const skipped = allProjNames.filter(n => !ecofinCodes.has(n) && !extraNames.includes(n.toLowerCase()))
+        console.log('[EcoFin Groups] EcoFin codes:', [...ecofinCodes])
+        console.log('[EcoFin Groups] Clockify projects:', allProjNames)
+        console.log('[EcoFin Groups] Matched:', matched)
+        console.log('[EcoFin Groups] Skipped:', skipped)
+
         const acc = {}; let total = 0
         for (const proj of (byProj?.groupOne || [])) {
           const projName = clockifyNameMap[proj._id] || ''
@@ -151,7 +160,7 @@ export default function Dashboard() {
         setClockifyGroups(groups)
       } catch (e) { console.warn('Clockify groups error:', e) }
     })()
-  }, [anio])
+  }, [anio, proyectos])
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
