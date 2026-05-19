@@ -136,10 +136,10 @@ export default function Dashboard() {
         const allProjNames = (byProj?.groupOne || []).map(p => clockifyNameMap[p._id] || p.name || p._id)
         const matched = allProjNames.filter(n => ecofinCodes.has(n) || extraNames.includes(n.toLowerCase()))
         const skipped = allProjNames.filter(n => !ecofinCodes.has(n) && !extraNames.includes(n.toLowerCase()))
-        console.log('[EcoFin Groups] EcoFin codes:', [...ecofinCodes])
-        console.log('[EcoFin Groups] Clockify projects:', allProjNames)
-        console.log('[EcoFin Groups] Matched:', matched)
-        console.log('[EcoFin Groups] Skipped:', skipped)
+        console.log('[EcoFin Groups] EcoFin codes:', [...ecofinCodes].join(' | '))
+        console.log('[EcoFin Groups] Clockify projects:', allProjNames.join(' | '))
+        console.log('[EcoFin Groups] Matched:', matched.join(' | '))
+        console.log('[EcoFin Groups] Skipped:', skipped.join(' | '))
 
         const acc = {}; let total = 0
         for (const proj of (byProj?.groupOne || [])) {
