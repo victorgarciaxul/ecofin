@@ -502,9 +502,14 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
       .sort((a, b) => b.duration - a.duration)
   }
 
-  // Global totals per group
+  // Global totals per group — only EcoFin projects + Estructura XUL + Producción y eventos
+  const ecofinCodes = new Set(Object.keys(ecofinNameMap))
+  const extraNames = ['estructura xul', 'producción y eventos']
   const globalGroupAcc = {}; let globalGroupTotal = 0
   for (const proj of (byProject?.groupOne || [])) {
+    const isEcofin = ecofinCodes.has(proj.name)
+    const isExtra  = extraNames.includes((proj.name || '').toLowerCase())
+    if (!isEcofin && !isExtra) continue
     for (const user of (proj.children || [])) {
       const grp = userGroupMap[user._id]
       if (!grp || grp.toLowerCase().includes('fundación')) continue

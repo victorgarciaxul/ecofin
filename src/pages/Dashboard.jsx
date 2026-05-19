@@ -126,8 +126,18 @@ export default function Dashboard() {
           for (const uid of (g.userIds || []))
             if (!userGroupMap[uid]) userGroupMap[uid] = g.name
 
+        // Only count EcoFin projects + Estructura XUL + Producción y eventos
+        const ecofinCodes = new Set(proyectos.map(p => p.codigo_proyecto))
+        const extraNames = ['estructura xul', 'producción y eventos']
+        const clockifyNameMap = {}
+        for (const cp of clockifyProjs) clockifyNameMap[cp.id] = cp.name
+
         const acc = {}; let total = 0
         for (const proj of (byProj?.groupOne || [])) {
+          const projName = clockifyNameMap[proj._id] || ''
+          const isEcofin = ecofinCodes.has(projName)
+          const isExtra  = extraNames.includes(projName.toLowerCase())
+          if (!isEcofin && !isExtra) continue
           for (const user of (proj.children || [])) {
             const grp = userGroupMap[user._id]
             if (!grp || grp.toLowerCase().includes('fundación')) continue
