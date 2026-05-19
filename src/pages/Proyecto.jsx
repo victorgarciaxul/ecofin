@@ -377,22 +377,19 @@ function grpColor(name = '') {
 }
 
 function ClockifyGroups({ codigoProyecto, anio }) {
-  const storageKey = `clockify_link_${codigoProyecto}`
   const [loading, setLoading]     = useState(true)
-  const [groups, setGroups]       = useState([])
+  const [members, setMembers]     = useState([])
+  const [groupName, setGroupName] = useState('')
   const [totalSecs, setTotalSecs] = useState(0)
-  const [allProjs, setAllProjs]   = useState([])
-  const [linkedId, setLinkedId]   = useState(() => localStorage.getItem(storageKey) || '')
   const [error, setError]         = useState(null)
 
-  // Cached data from the initial fetch so re-selecting doesn't re-fetch
-  const cacheRef = useRef({ byProj: null, userGroupsData: null, clockifyProjs: [] })
-
-  useEffect(() => { fetchAll() }, [codigoProyecto, anio]) // eslint-disable-line
-
-  async function fetchAll() {
+  useEffect(() => {
     const wsId = localStorage.getItem('clockify_ws')
     if (!wsId) { setLoading(false); return }
+    fetchGroupMembers(wsId)
+  }, [codigoProyecto, anio]) // eslint-disable-line
+
+  async function fetchGroupMembers(wsId) {
     setLoading(true); setError(null)
     try {
       const start = new Date(anio, 0, 1).toISOString()
@@ -402,105 +399,66 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         getSummaryByProject(wsId, start, end),
         getUserGroups(wsId).catch(() => []),
       ])
-      cacheRef.current = { byProj, userGroupsData, clockifyProjs }
-      setAllProjs([...clockifyProjs].sort((a, b) => a.name.localeCompare(b.name)))
+      const cProj = clockifyProjs.find(p => p.name === codigoProyecto)
+      if (!cProj) { setMembers([]); setLoading(false); return }
 
-      const savedId = localStorage.getItem(storageKey)
-      if (savedId) computeGroups(savedId, clockifyProjs, byProj, userGroupsData)
-    } catch (e) {
-      setError(e.message)
-    }
+      // Find the user group that matches the project code
+      const matchingGroup = (userGroupsData || []).find(g => g.name === codigoProyecto)
+      if (!matchingGroup) { setMembers([]); setLoading(false); return }
+      setGroupName(matchingGroup.name)
+      const allowedIds = new Set(matchingGroup.userIds || [])
+
+      const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
+      const users = []; let total = 0
+      for (const user of (projSummary?.children || [])) {
+        if (!allowedIds.has(user._id)) continue
+        users.push({ name: user.name, duration: user.duration || 0 })
+        total += user.duration || 0
+      }
+      setMembers(users.map(u => ({ ...u, pct: total > 0 ? (u.duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
+      setTotalSecs(total)
+    } catch (e) { setError(e.message) }
     setLoading(false)
   }
 
-  function computeGroups(projId, clockifyProjs, byProj, userGroupsData) {
-    const cProj = clockifyProjs.find(p => p.id === projId)
-    if (!cProj) return
-
-    const groupMap = {}
-    for (const g of (userGroupsData || []))
-      for (const uid of (g.userIds || []))
-        if (!groupMap[uid]) groupMap[uid] = g.name
-
-    const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
-    const acc = {}; let total = 0
-    for (const user of (projSummary?.children || [])) {
-      const grp = groupMap[user._id]; if (!grp || grp.toLowerCase().includes('fundación')) continue
-      acc[grp] = (acc[grp] || 0) + (user.duration || 0)
-      total += user.duration || 0
-    }
-    setGroups(Object.entries(acc).map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
-    setTotalSecs(total)
-  }
-
-  function handleSelect(id) {
-    if (!id) return
-    localStorage.setItem(storageKey, id)
-    setLinkedId(id)
-    const { byProj, userGroupsData, clockifyProjs } = cacheRef.current
-    computeGroups(id, clockifyProjs, byProj, userGroupsData)
-  }
-
-  function handleClear() {
-    localStorage.removeItem(storageKey)
-    setLinkedId(''); setGroups([]); setTotalSecs(0)
-  }
-
-  const linkedName = linkedId ? allProjs.find(p => p.id === linkedId)?.name : null
+  if (!loading && members.length === 0 && !error) return null
 
   return (
     <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
-        {groups.length > 0 && totalSecs > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas del equipo · {anio}</p>
+          {groupName && <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#F59E0B18', color: '#F59E0B' }}>{groupName}</span>}
+        </div>
+        {totalSecs > 0 && (
           <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
         )}
       </div>
 
-      {/* Selector — always visible */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span style={{ fontSize: 12, color: 'var(--c-text-3)', flexShrink: 0 }}>Proyecto Clockify:</span>
-        {loading ? (
-          <span style={{ fontSize: 12, color: 'var(--c-text-4)' }}>Cargando…</span>
-        ) : (
-          <>
-            <select value={linkedId} onChange={e => handleSelect(e.target.value)}
-              style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 12, cursor: 'pointer' }}>
-              <option value="">— Seleccionar —</option>
-              {allProjs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            {linkedId && (
-              <button onClick={handleClear} title="Desvincular"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', fontSize: 14, padding: 2 }}>✕</button>
-            )}
-          </>
-        )}
-      </div>
-
+      {loading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-text-3)', padding: '8px 0' }}>
+          <div style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: 12 }}>Cargando datos de Clockify…</span>
+        </div>
+      )}
       {error && <p style={{ fontSize: 12, color: '#EF4444' }}>Error: {error}</p>}
 
-      {!linkedId && !loading && (
-        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Selecciona el proyecto de Clockify para ver el desglose por grupo</p>
-      )}
-
-      {linkedId && groups.length === 0 && !loading && (
-        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic' }}>Sin horas registradas para este proyecto en {anio}</p>
-      )}
-
-      {groups.length > 0 && (
+      {members.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {groups.map(g => {
-            const gc = grpColor(g.name)
+          {members.map(m => {
+            const mc = grpColor(m.name)
             return (
-              <div key={g.name}>
+              <div key={m.name}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: gc, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-1)', flex: 1 }}>{g.name}</span>
-                  <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: gc }}>{g.pct.toFixed(1)}%</span>
-                  <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 48, textAlign: 'right' }}>{fmtH(g.duration)}</span>
+                  <div style={{ width: 24, height: 24, borderRadius: 6, background: mc, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{m.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-1)', flex: 1 }}>{m.name}</span>
+                  <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: mc }}>{m.pct.toFixed(1)}%</span>
+                  <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 48, textAlign: 'right' }}>{fmtH(m.duration)}</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)', marginLeft: 18 }}>
-                  <div style={{ width: `${g.pct}%`, height: '100%', borderRadius: 3, background: gc, opacity: 0.75, transition: 'width 0.5s' }} />
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)', marginLeft: 34 }}>
+                  <div style={{ width: `${m.pct}%`, height: '100%', borderRadius: 3, background: mc, opacity: 0.75, transition: 'width 0.5s' }} />
                 </div>
               </div>
             )
