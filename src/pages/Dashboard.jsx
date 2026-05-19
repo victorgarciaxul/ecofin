@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, BarChart2, Layers } from 'lucide-react'
 import {
@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts'
 import { useData } from '../context/DataContext'
+import { getProjects, getSummaryByProject, getUserGroups } from '../lib/clockify'
 
 const ESTADO_BADGE = {
   activo:    { label: 'Activo',    bg: '#10B98118', color: '#10B981' },
@@ -47,6 +48,20 @@ function BarEjec({ value }) {
       </span>
     </div>
   )
+}
+
+function fmtH(seconds) {
+  if (!seconds) return '0h'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
+function grpColor(name = '') {
+  const n = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
 }
 
 function fmtK(n) {
@@ -91,6 +106,42 @@ export default function Dashboard() {
   const [gestorFilter, setGestorFilter]           = useState('')
   const [showChart, setShowChart]                 = useState(true)
   const [vistaGlobal, setVistaGlobal]             = useState(false)
+  const [clockifyGroups, setClockifyGroups]       = useState([])
+
+  // Fetch Clockify groups totals
+  useEffect(() => {
+    const wsId = localStorage.getItem('clockify_ws')
+    if (!wsId) return
+    ;(async () => {
+      try {
+        const start = new Date(anio, 0, 1).toISOString()
+        const end   = new Date(anio, 11, 31, 23, 59, 59, 999).toISOString()
+        const [clockifyProjs, byProj, userGroupsData] = await Promise.all([
+          getProjects(wsId),
+          getSummaryByProject(wsId, start, end),
+          getUserGroups(wsId).catch(() => []),
+        ])
+        const userGroupMap = {}
+        for (const g of (userGroupsData || []))
+          for (const uid of (g.userIds || []))
+            if (!userGroupMap[uid]) userGroupMap[uid] = g.name
+
+        const acc = {}; let total = 0
+        for (const proj of (byProj?.groupOne || [])) {
+          for (const user of (proj.children || [])) {
+            const grp = userGroupMap[user._id]
+            if (!grp || grp.toLowerCase().includes('fundación')) continue
+            acc[grp] = (acc[grp] || 0) + (user.duration || 0)
+            total += user.duration || 0
+          }
+        }
+        const groups = Object.entries(acc)
+          .map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 }))
+          .sort((a, b) => b.duration - a.duration)
+        setClockifyGroups(groups)
+      } catch (e) { console.warn('Clockify groups error:', e) }
+    })()
+  }, [anio])
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
@@ -301,6 +352,24 @@ export default function Dashboard() {
           )
         })}
       </div>
+
+      {/* Clockify group pills */}
+      {clockifyGroups.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Grupos</span>
+          {clockifyGroups.map(g => {
+            const gc = grpColor(g.name)
+            return (
+              <div key={g.name} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: `1px solid var(--c-border)`, borderRadius: 20, padding: '4px 12px' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: gc, flexShrink: 0 }} />
+                <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{g.name}</span>
+                <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: gc }}>{fmtH(g.duration)}</span>
+                <span className="font-numeric" style={{ fontSize: 10, fontWeight: 600, color: gc, opacity: 0.7 }}>({g.pct.toFixed(1)}%)</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Overview chart */}
       {showChart && chartRows.length > 0 && (
