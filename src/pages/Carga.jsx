@@ -569,9 +569,9 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
             color: groupColor(g.name),
           })),
         ].filter(Boolean).map((chip, i) => (
-          <div key={i} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '13px 16px', fontFamily: 'Poppins, sans-serif' }}>
+          <div key={i} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '13px 16px' }}>
             <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 4 }}>{chip.label}</p>
-            <p style={{ fontSize: 18, fontWeight: 700, color: chip.color || 'var(--c-text-1)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{chip.value}</p>
+            <p className="font-numeric" style={{ fontSize: 18, fontWeight: 700, color: chip.color || 'var(--c-text-1)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{chip.value}</p>
             {chip.sub && <p style={{ fontSize: 10, color: chip.color || 'var(--c-text-3)', marginTop: 2, fontWeight: 600 }}>{chip.sub}</p>}
           </div>
         ))}
