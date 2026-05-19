@@ -127,25 +127,18 @@ export default function Dashboard() {
             if (!userGroupMap[uid]) userGroupMap[uid] = g.name
 
         // Only count EcoFin projects + Estructura XUL + Producción y eventos
-        const ecofinCodes = new Set(proyectos.map(p => p.codigo_proyecto))
+        // Match by nombre_contrato since Clockify uses real names, not codes
+        const ecofinNames = new Set(proyectos.map(p => (p.nombre_contrato || '').toLowerCase()))
         const extraNames = ['estructura xul', 'producción y eventos']
         const clockifyNameMap = {}
         for (const cp of clockifyProjs) clockifyNameMap[cp.id] = cp.name
 
-        // Debug: log matching
-        const allProjNames = (byProj?.groupOne || []).map(p => clockifyNameMap[p._id] || p.name || p._id)
-        const matched = allProjNames.filter(n => ecofinCodes.has(n) || extraNames.includes(n.toLowerCase()))
-        const skipped = allProjNames.filter(n => !ecofinCodes.has(n) && !extraNames.includes(n.toLowerCase()))
-        console.log('[EcoFin Groups] EcoFin codes:', [...ecofinCodes].join(' | '))
-        console.log('[EcoFin Groups] Clockify projects:', allProjNames.join(' | '))
-        console.log('[EcoFin Groups] Matched:', matched.join(' | '))
-        console.log('[EcoFin Groups] Skipped:', skipped.join(' | '))
-
         const acc = {}; let total = 0
         for (const proj of (byProj?.groupOne || [])) {
           const projName = clockifyNameMap[proj._id] || ''
-          const isEcofin = ecofinCodes.has(projName)
-          const isExtra  = extraNames.includes(projName.toLowerCase())
+          const nameLower = projName.toLowerCase()
+          const isEcofin = ecofinNames.has(nameLower)
+          const isExtra  = extraNames.includes(nameLower)
           if (!isEcofin && !isExtra) continue
           for (const user of (proj.children || [])) {
             const grp = userGroupMap[user._id]

@@ -503,12 +503,14 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
   }
 
   // Global totals per group — only EcoFin projects + Estructura XUL + Producción y eventos
-  const ecofinCodes = new Set(Object.keys(ecofinNameMap))
+  // Match by nombre_contrato (values of ecofinNameMap) since Clockify uses real names
+  const ecofinContractNames = new Set(Object.values(ecofinNameMap).map(n => n.toLowerCase()))
   const extraNames = ['estructura xul', 'producción y eventos']
   const globalGroupAcc = {}; let globalGroupTotal = 0
   for (const proj of (byProject?.groupOne || [])) {
-    const isEcofin = ecofinCodes.has(proj.name)
-    const isExtra  = extraNames.includes((proj.name || '').toLowerCase())
+    const nameLower = (proj.name || '').toLowerCase()
+    const isEcofin = ecofinContractNames.has(nameLower)
+    const isExtra  = extraNames.includes(nameLower)
     if (!isEcofin && !isExtra) continue
     for (const user of (proj.children || [])) {
       const grp = userGroupMap[user._id]
