@@ -291,7 +291,7 @@ export default function Dashboard() {
     { label: 'Audiovisual',        value: null,                    color: '#F97316',  real: false },
   ]
 
-  const chartRows = [...activeRows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion).slice(0, 15)
+  const chartRows = [...activeRows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100%' }}>
@@ -378,7 +378,7 @@ export default function Dashboard() {
           <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 16 }}>Facturación y beneficio · {anio}</p>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
-              data={chartRows.map(r => ({ name: r.codigo_proyecto, facturacion: r.facturacion, beneficio: r.beneficio }))}
+              data={chartRows.map(r => ({ name: r.nombre_contrato, facturacion: r.facturacion, beneficio: r.beneficio }))}
               barCategoryGap="25%" barGap={4}
               margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
             >
