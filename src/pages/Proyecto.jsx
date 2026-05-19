@@ -378,18 +378,17 @@ function grpColor(name = '') {
 
 function ClockifyGroups({ codigoProyecto, anio }) {
   const [loading, setLoading]     = useState(true)
-  const [members, setMembers]     = useState([])
-  const [groupName, setGroupName] = useState('')
+  const [groups, setGroups]       = useState([])
   const [totalSecs, setTotalSecs] = useState(0)
   const [error, setError]         = useState(null)
 
   useEffect(() => {
     const wsId = localStorage.getItem('clockify_ws')
     if (!wsId) { setLoading(false); return }
-    fetchGroupMembers(wsId)
+    fetchGroups(wsId)
   }, [codigoProyecto, anio]) // eslint-disable-line
 
-  async function fetchGroupMembers(wsId) {
+  async function fetchGroups(wsId) {
     setLoading(true); setError(null)
     try {
       const start = new Date(anio, 0, 1).toISOString()
@@ -399,37 +398,35 @@ function ClockifyGroups({ codigoProyecto, anio }) {
         getSummaryByProject(wsId, start, end),
         getUserGroups(wsId).catch(() => []),
       ])
+      // Auto-match: find Clockify project whose name matches the project code
       const cProj = clockifyProjs.find(p => p.name === codigoProyecto)
-      if (!cProj) { setMembers([]); setLoading(false); return }
+      if (!cProj) { setGroups([]); setLoading(false); return }
 
-      // Find the user group that matches the project code
-      const matchingGroup = (userGroupsData || []).find(g => g.name === codigoProyecto)
-      if (!matchingGroup) { setMembers([]); setLoading(false); return }
-      setGroupName(matchingGroup.name)
-      const allowedIds = new Set(matchingGroup.userIds || [])
+      const groupMap = {}
+      for (const g of (userGroupsData || []))
+        for (const uid of (g.userIds || []))
+          if (!groupMap[uid]) groupMap[uid] = g.name
 
       const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
-      const users = []; let total = 0
+      const acc = {}; let total = 0
       for (const user of (projSummary?.children || [])) {
-        if (!allowedIds.has(user._id)) continue
-        users.push({ name: user.name, duration: user.duration || 0 })
+        const grp = groupMap[user._id]
+        if (!grp || grp.toLowerCase().includes('fundación')) continue
+        acc[grp] = (acc[grp] || 0) + (user.duration || 0)
         total += user.duration || 0
       }
-      setMembers(users.map(u => ({ ...u, pct: total > 0 ? (u.duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
+      setGroups(Object.entries(acc).map(([name, duration]) => ({ name, duration, pct: total > 0 ? (duration / total) * 100 : 0 })).sort((a, b) => b.duration - a.duration))
       setTotalSecs(total)
     } catch (e) { setError(e.message) }
     setLoading(false)
   }
 
-  if (!loading && members.length === 0 && !error) return null
+  if (!loading && groups.length === 0 && !error) return null
 
   return (
     <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '18px 24px', marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas del equipo · {anio}</p>
-          {groupName && <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: '#F59E0B18', color: '#F59E0B' }}>{groupName}</span>}
-        </div>
+        <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Horas por grupo · {anio}</p>
         {totalSecs > 0 && (
           <span className="font-numeric" style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-text-2)' }}>{fmtH(totalSecs)} totales</span>
         )}
@@ -443,22 +440,20 @@ function ClockifyGroups({ codigoProyecto, anio }) {
       )}
       {error && <p style={{ fontSize: 12, color: '#EF4444' }}>Error: {error}</p>}
 
-      {members.length > 0 && (
+      {groups.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {members.map(m => {
-            const mc = grpColor(m.name)
+          {groups.map(g => {
+            const gc = grpColor(g.name)
             return (
-              <div key={m.name}>
+              <div key={g.name}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                  <div style={{ width: 24, height: 24, borderRadius: 6, background: mc, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{m.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-1)', flex: 1 }}>{m.name}</span>
-                  <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: mc }}>{m.pct.toFixed(1)}%</span>
-                  <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 48, textAlign: 'right' }}>{fmtH(m.duration)}</span>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: gc, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-1)', flex: 1 }}>{g.name}</span>
+                  <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: gc }}>{g.pct.toFixed(1)}%</span>
+                  <span className="font-numeric" style={{ fontSize: 12, color: 'var(--c-text-3)', minWidth: 48, textAlign: 'right' }}>{fmtH(g.duration)}</span>
                 </div>
-                <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)', marginLeft: 34 }}>
-                  <div style={{ width: `${m.pct}%`, height: '100%', borderRadius: 3, background: mc, opacity: 0.75, transition: 'width 0.5s' }} />
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--c-border)', marginLeft: 18 }}>
+                  <div style={{ width: `${g.pct}%`, height: '100%', borderRadius: 3, background: gc, opacity: 0.75, transition: 'width 0.5s' }} />
                 </div>
               </div>
             )
