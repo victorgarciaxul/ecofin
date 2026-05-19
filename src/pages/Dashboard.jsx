@@ -401,8 +401,9 @@ export default function Dashboard() {
                   label,
                 ]}
                 labelFormatter={(label) => { const d = data.find(x => x.name === label); return d?.fullName || label }}
-                labelStyle={{ fontWeight: 700, color: 'var(--c-text-1)', marginBottom: 4 }}
-                contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk', background: 'var(--c-bg-surface)' }}
+                labelStyle={{ fontWeight: 700, color: '#fff', marginBottom: 4 }}
+                itemStyle={{ color: '#fff' }}
+                contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12, fontFamily: 'Poppins, sans-serif', background: '#3B82F6', color: '#fff', boxShadow: '0 4px 16px rgba(59,130,246,0.35)' }}
               />
               <ReferenceLine x={0} stroke="var(--c-border)" />
               <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[0,3,3,0]} maxBarSize={16} />
