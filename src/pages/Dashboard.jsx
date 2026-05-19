@@ -291,7 +291,7 @@ export default function Dashboard() {
     { label: 'Audiovisual',        value: null,                    color: '#F97316',  real: false },
   ]
 
-  const chartRows = [...activeRows].filter(r => r.facturacion > 0).sort((a, b) => b.facturacion - a.facturacion)
+  const chartRows = [...activeRows].sort((a, b) => b.facturacion - a.facturacion)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100%' }}>
