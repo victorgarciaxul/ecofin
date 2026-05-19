@@ -502,6 +502,20 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
       .sort((a, b) => b.duration - a.duration)
   }
 
+  // Global totals per group
+  const globalGroupAcc = {}; let globalGroupTotal = 0
+  for (const proj of (byProject?.groupOne || [])) {
+    for (const user of (proj.children || [])) {
+      const grp = userGroupMap[user._id]
+      if (!grp || grp.toLowerCase().includes('fundación')) continue
+      globalGroupAcc[grp] = (globalGroupAcc[grp] || 0) + (user.duration || 0)
+      globalGroupTotal += user.duration || 0
+    }
+  }
+  const globalGroups = Object.entries(globalGroupAcc)
+    .map(([name, duration]) => ({ name, duration, pct: globalGroupTotal > 0 ? (duration / globalGroupTotal) * 100 : 0 }))
+    .sort((a, b) => b.duration - a.duration)
+
   const items = projs
     .map((p, idx) => ({
       clockifyName: p.name,
@@ -542,12 +556,18 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ── Stats chips ── */}
+      {/* ── Stats chips + group cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
         {[
           { label: 'Total horas',   value: fmtH(totalSeconds), sub: null },
           { label: 'Proyectos activos', value: items.length, sub: null },
           items[0] ? { label: 'Proyecto top', value: items[0].name, sub: `${items[0].pct.toFixed(1)}% del período`, color: items[0].color } : null,
+          ...globalGroups.map(g => ({
+            label: g.name,
+            value: fmtH(g.duration),
+            sub: `${g.pct.toFixed(1)}% del total`,
+            color: groupColor(g.name),
+          })),
         ].filter(Boolean).map((chip, i) => (
           <div key={i} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '13px 16px' }}>
             <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginBottom: 4 }}>{chip.label}</p>
