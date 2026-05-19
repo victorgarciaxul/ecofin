@@ -494,7 +494,7 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
     const acc = {}
     for (const user of (proj.children || [])) {
       const grp = userGroupMap[user._id] || null
-      if (!grp) continue
+      if (!grp || grp.toLowerCase().includes('fundación')) continue
       acc[grp] = (acc[grp] || 0) + (user.duration || 0)
     }
     groupsByProjectId[proj._id] = Object.entries(acc)

@@ -425,7 +425,7 @@ function ClockifyGroups({ codigoProyecto, anio }) {
     const projSummary = (byProj?.groupOne || []).find(p => p._id === cProj.id)
     const acc = {}; let total = 0
     for (const user of (projSummary?.children || [])) {
-      const grp = groupMap[user._id]; if (!grp) continue
+      const grp = groupMap[user._id]; if (!grp || grp.toLowerCase().includes('fundación')) continue
       acc[grp] = (acc[grp] || 0) + (user.duration || 0)
       total += user.duration || 0
     }
