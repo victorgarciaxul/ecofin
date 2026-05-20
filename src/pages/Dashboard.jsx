@@ -107,6 +107,19 @@ export default function Dashboard() {
   const [showChart, setShowChart]                 = useState(true)
   const topScrollRef   = useRef(null)
   const tableScrollRef = useRef(null)
+  const [tableWidth, setTableWidth] = useState(1600)
+
+  const syncTopWidth = useCallback(() => {
+    if (!tableScrollRef.current) return
+    const table = tableScrollRef.current.querySelector('table')
+    if (table) setTableWidth(table.scrollWidth)
+  }, [])
+
+  useEffect(() => {
+    syncTopWidth()
+    window.addEventListener('resize', syncTopWidth)
+    return () => window.removeEventListener('resize', syncTopWidth)
+  }, [syncTopWidth])
   const [vistaGlobal, setVistaGlobal]             = useState(false)
   const [clockifyGroups, setClockifyGroups]       = useState([])
 
@@ -518,10 +531,10 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
-          <div ref={topScrollRef} onScroll={() => { if (tableScrollRef.current && topScrollRef.current) tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft }} style={{ overflowX: 'auto', overflowY: 'hidden', marginBottom: -1 }}>
-            <div style={{ width: 1600, height: 1 }} />
+          <div ref={topScrollRef} onScroll={() => { if (tableScrollRef.current && topScrollRef.current) tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft }} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+            <div style={{ width: tableWidth, height: 12 }} />
           </div>
-          <div ref={tableScrollRef} onScroll={() => { if (topScrollRef.current && tableScrollRef.current) topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft }} style={{ overflowX: 'auto' }}>
+          <div ref={(el) => { tableScrollRef.current = el; syncTopWidth() }} onScroll={() => { if (topScrollRef.current && tableScrollRef.current) topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft }} style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', minWidth: 1600, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--c-bg-muted)' }}>
