@@ -516,7 +516,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', minWidth: 1600, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--c-bg-muted)' }}>
                   <TH label="ID"           col="codigo_proyecto"      align="left" minW={90} />
