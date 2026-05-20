@@ -523,20 +523,20 @@ export default function Dashboard() {
                   {vistaGlobal && <TH label="Período" col={null} align="left" minW={90} />}
                   <TH label="Contrato"     col="nombre_contrato"      align="left" minW={180} />
                   <TH label="Cliente"      col="cliente"              align="left" minW={130} />
-                  <TH label="Responsable"  col="responsable_contrato" align="left" minW={120} />
-                  <TH label="Gestor"       col="gestor_proyecto"      align="left" minW={120} />
-                  <TH label="Estado"       col={null}                 align="center" minW={90} />
                   <TH label="Previsión"   col="presupuesto"     minW={120} />
                   <TH label="Facturado"   col="facturacion"     minW={120} />
                   <TH label="% Ejec."     col="ejec"            minW={110} />
+                  <TH label="Beneficio"   col="beneficio"       minW={120} />
+                  <TH label="% Gan."      col="pct_gan"         minW={70} />
                   <TH label="Coste Pers." col="coste_personal"  minW={120} />
                   <TH label="% CP"        col={null}            minW={70} />
                   <TH label="Producción"  col="produccion"      minW={120} />
                   <TH label="% Prod."     col={null}            minW={70} />
                   <TH label="P. Medios"   col="plan_medios"     minW={120} />
                   <TH label="% PM"        col={null}            minW={70} />
-                  <TH label="Beneficio"   col="beneficio"       minW={120} />
-                  <TH label="% Gan."      col="pct_gan"         minW={70} />
+                  <TH label="Responsable"  col="responsable_contrato" align="left" minW={120} />
+                  <TH label="Gestor"       col="gestor_proyecto"      align="left" minW={120} />
+                  <TH label="Estado"       col={null}                 align="center" minW={90} />
                 </tr>
               </thead>
               <tbody>
@@ -561,38 +561,39 @@ export default function Dashboard() {
                       )}
                       <td style={{ padding: '11px 12px', fontWeight: 500, color: 'var(--c-text-1)', maxWidth: 220 }}><span style={{ display: 'block', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.nombre_contrato}</span></td>
                       <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.cliente}</td>
-                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.responsable_contrato || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
-                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.gestor_proyecto || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
-                      <td style={{ padding: '11px 12px', textAlign: 'center' }}><span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.presupuesto)}</td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 500 }}>{fmt(p.facturacion)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><BarEjec value={p.ejec} /></td>
+                      <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: p.beneficio < 0 ? '#EF4444' : '#10B981' }}>{fmt(p.beneficio)}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.beneficio} den={p.facturacion} /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.coste_personal)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.coste_personal} den={p.facturacion} invert /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.produccion)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.produccion} den={p.facturacion} invert /></td>
                       <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', color: 'var(--c-text-2)' }}>{fmt(p.plan_medios)}</td>
                       <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.plan_medios} den={p.facturacion} invert /></td>
-                      <td className="font-numeric" style={{ padding: '11px 12px', textAlign: 'right', fontWeight: 700, color: p.beneficio < 0 ? '#EF4444' : '#10B981' }}>{fmt(p.beneficio)}</td>
-                      <td style={{ padding: '11px 12px', textAlign: 'right' }}><PctPill num={p.beneficio} den={p.facturacion} /></td>
+                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.responsable_contrato || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
+                      <td style={{ padding: '11px 12px', color: 'var(--c-text-2)', whiteSpace: 'nowrap', fontSize: 12 }}>{p.gestor_proyecto || <span style={{ color: 'var(--c-text-4)' }}>—</span>}</td>
+                      <td style={{ padding: '11px 12px', textAlign: 'center' }}><span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span></td>
                     </tr>
                   )
                 })}
               </tbody>
               <tfoot>
                 <tr style={{ background: 'var(--c-bg-muted)', borderTop: '2px solid var(--c-border)' }}>
-                  <td colSpan={vistaGlobal ? 7 : 6} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {activeRows.length} proyecto{activeRows.length !== 1 ? 's' : ''}{vistaGlobal ? ' (vista global)' : ''}</td>
+                  <td colSpan={vistaGlobal ? 4 : 3} style={{ padding: '12px 12px', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>TOTALES · {activeRows.length} proyecto{activeRows.length !== 1 ? 's' : ''}{vistaGlobal ? ' (vista global)' : ''}</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#7C4DFF' }}>{fmt(totales.presupuesto)}</td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#10B981' }}>{fmt(totales.facturacion)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.facturacion} den={totales.presupuesto} /></td>
+                  <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' }}>{fmt(totales.beneficio)}</td>
+                  <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.beneficio} den={totales.facturacion} /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.coste_personal)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.coste_personal} den={totales.facturacion} invert /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.produccion)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.produccion} den={totales.facturacion} invert /></td>
                   <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700 }}>{fmt(totales.plan_medios)}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.plan_medios} den={totales.facturacion} invert /></td>
-                  <td className="font-numeric" style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' }}>{fmt(totales.beneficio)}</td>
-                  <td style={{ padding: '12px 12px', textAlign: 'right' }}><PctPill num={totales.beneficio} den={totales.facturacion} /></td>
+                  <td colSpan={3}></td>
                 </tr>
               </tfoot>
             </table>
