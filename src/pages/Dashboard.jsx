@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, BarChart2, Layers } from 'lucide-react'
 import {
@@ -105,6 +105,8 @@ export default function Dashboard() {
   const [responsableFilter, setResponsableFilter] = useState('')
   const [gestorFilter, setGestorFilter]           = useState('')
   const [showChart, setShowChart]                 = useState(true)
+  const topScrollRef   = useRef(null)
+  const tableScrollRef = useRef(null)
   const [vistaGlobal, setVistaGlobal]             = useState(false)
   const [clockifyGroups, setClockifyGroups]       = useState([])
 
@@ -515,7 +517,11 @@ export default function Dashboard() {
             <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--c-text-3)' }}>No hay proyectos para este filtro</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <>
+          <div ref={topScrollRef} onScroll={() => { if (tableScrollRef.current && topScrollRef.current) tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft }} style={{ overflowX: 'auto', overflowY: 'hidden', marginBottom: -1 }}>
+            <div style={{ width: 1600, height: 1 }} />
+          </div>
+          <div ref={tableScrollRef} onScroll={() => { if (topScrollRef.current && tableScrollRef.current) topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft }} style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', minWidth: 1600, borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: 'var(--c-bg-muted)' }}>
@@ -598,6 +604,7 @@ export default function Dashboard() {
               </tfoot>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>
