@@ -123,13 +123,10 @@ export function DataProvider({ children }) {
     setEntradas(DEMO_ENTRADAS)
   }
 
-  function exportData() {
-    const data = {
-      version: 1,
-      exportDate: new Date().toISOString(),
-      proyectos,
-      entradas,
-    }
+  function doExport(datos) {
+    const p = datos?.proyectos ?? proyectos
+    const e = datos?.entradas ?? entradas
+    const data = { version: 1, exportDate: new Date().toISOString(), proyectos: p, entradas: e }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
@@ -137,7 +134,24 @@ export function DataProvider({ children }) {
     a.download = `ecofin_backup_${fecha}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+    localStorage.setItem('ecofin_last_backup', Date.now().toString())
   }
+
+  function exportData() { doExport() }
+
+  // Auto-backup semanal: descarga automáticamente si han pasado 7+ días
+  useEffect(() => {
+    const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+    const last = Number(localStorage.getItem('ecofin_last_backup') || '0')
+    if (Date.now() - last >= WEEK_MS && proyectos.length > 0) {
+      // Pequeño delay para no interferir con la carga inicial
+      const timer = setTimeout(() => {
+        doExport({ proyectos, entradas })
+        console.log('🔄 Auto-backup semanal descargado')
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, []) // solo al montar la app
 
   function importData(file) {
     return new Promise((resolve, reject) => {
