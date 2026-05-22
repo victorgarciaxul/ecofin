@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, BarChart2, Layers } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, BarChart2, Layers, Save } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -96,7 +96,9 @@ const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 
 export default function Dashboard() {
-  const { proyectos, entradas } = useData()
+  const { proyectos, entradas, exportData, importData } = useData()
+  const importRef = useRef(null)
+  const [importMsg, setImportMsg] = useState(null)
   const navigate = useNavigate()
   const [search, setSearch]             = useState('')
   const [anio, setAnio]                 = useState(CURRENT_YEAR)
@@ -342,11 +344,37 @@ export default function Dashboard() {
           <button onClick={() => exportCSV(rows, anio)} title="Exportar CSV" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'var(--c-bg-surface)', color: 'var(--c-text-2)', border: '1.5px solid var(--c-border)', cursor: 'pointer' }}>
             <Download size={14} /> CSV
           </button>
+          <button onClick={exportData} title="Descargar copia de seguridad completa (JSON)" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#3B82F618', color: '#3B82F6', border: '1.5px solid #3B82F650', cursor: 'pointer' }}>
+            <Save size={14} /> Backup
+          </button>
+          <button onClick={() => importRef.current?.click()} title="Restaurar datos desde copia de seguridad" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'var(--c-bg-surface)', color: 'var(--c-text-2)', border: '1.5px solid var(--c-border)', cursor: 'pointer' }}>
+            <Upload size={14} /> Restaurar
+          </button>
+          <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            if (!window.confirm('¿Estás seguro? Esto reemplazará todos los datos actuales con los del archivo de backup.')) { e.target.value = ''; return }
+            try {
+              const result = await importData(file)
+              setImportMsg(`✅ Restaurado: ${result.proyectos} proyectos y ${result.entradas} entradas`)
+              setTimeout(() => setImportMsg(null), 5000)
+            } catch (err) {
+              setImportMsg(`❌ ${err.message}`)
+              setTimeout(() => setImportMsg(null), 5000)
+            }
+            e.target.value = ''
+          }} />
           <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
             <Plus size={14} /> Nuevo proyecto
           </button>
         </div>
       </div>
+
+      {importMsg && (
+        <div style={{ padding: '10px 16px', borderRadius: 8, marginBottom: 12, fontSize: 13, fontWeight: 600, background: importMsg.startsWith('✅') ? '#10B98118' : '#EF444418', color: importMsg.startsWith('✅') ? '#10B981' : '#EF4444', border: `1px solid ${importMsg.startsWith('✅') ? '#10B98140' : '#EF444440'}` }}>
+          {importMsg}
+        </div>
+      )}
 
       {/* KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14, marginBottom: 12 }}>

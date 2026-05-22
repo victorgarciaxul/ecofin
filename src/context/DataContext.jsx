@@ -123,11 +123,49 @@ export function DataProvider({ children }) {
     setEntradas(DEMO_ENTRADAS)
   }
 
+  function exportData() {
+    const data = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      proyectos,
+      entradas,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    const fecha = new Date().toISOString().slice(0, 10)
+    a.download = `ecofin_backup_${fecha}.json`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  function importData(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result)
+          if (!data.proyectos || !Array.isArray(data.proyectos)) {
+            reject(new Error('Archivo no válido: no contiene proyectos'))
+            return
+          }
+          setProyectos(data.proyectos)
+          setEntradas(data.entradas || [])
+          resolve({ proyectos: data.proyectos.length, entradas: (data.entradas || []).length })
+        } catch (err) {
+          reject(new Error('Error al leer el archivo: ' + err.message))
+        }
+      }
+      reader.onerror = () => reject(new Error('Error al leer el archivo'))
+      reader.readAsText(file)
+    })
+  }
+
   return (
     <DataContext.Provider value={{
       proyectos, entradas, loading, isDemo,
       addProyecto, updateProyecto, deleteProyecto, saveEntradas, getEntradasProyecto,
-      resetToDemo,
+      resetToDemo, exportData, importData,
     }}>
       {children}
     </DataContext.Provider>
