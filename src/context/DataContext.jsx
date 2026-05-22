@@ -130,7 +130,8 @@ export function DataProvider({ children }) {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    const fecha = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const fecha = `${now.toISOString().slice(0, 10)}_${now.toTimeString().slice(0, 5).replace(':', 'h')}`
     a.download = `ecofin_backup_${fecha}.json`
     a.click()
     URL.revokeObjectURL(a.href)
