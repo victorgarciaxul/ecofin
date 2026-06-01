@@ -60,15 +60,36 @@ export default function Proyecto() {
   const [headerForm, setHeaderForm] = useState(proyecto ? { ...proyecto } : {})
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [chartView, setChartView]         = useState('mensual')
-  const [syncingMytrack, setSyncingMytrack] = useState(false)
-  const [syncMsg, setSyncMsg]               = useState('')   // "Sincronizado · X meses" | error
+  const [syncingMytrack, setSyncingMytrack]     = useState(false)
+  const [syncMsg, setSyncMsg]                   = useState('')
+  const [mytrackProject, setMytrackProject]     = useState(() =>
+    localStorage.getItem(`ecofin-mt-${id}`) || ''
+  )
+  const [mytrackProjects, setMytrackProjects]   = useState([])
+  const [showMtPicker, setShowMtPicker]         = useState(false)
+
+  async function loadMytrackProjects() {
+    try {
+      const url = `${MYTRACK_API}?year=${proyecto.anio}&workspace=xul-ws-1&list=1`
+      const res  = await fetch(url)
+      const data = await res.json()
+      if (data.ok) setMytrackProjects(data.projects || [])
+    } catch { /* ignore */ }
+  }
+
+  function saveMtProject(name) {
+    setMytrackProject(name)
+    if (name) localStorage.setItem(`ecofin-mt-${id}`, name)
+    else localStorage.removeItem(`ecofin-mt-${id}`)
+    setShowMtPicker(false)
+  }
 
   async function syncFromMytrack() {
     setSyncingMytrack(true)
     setSyncMsg('')
     try {
-      // Use codigo_proyecto as project filter; fall back to nombre_contrato
-      const projectFilter = headerForm.codigo_proyecto || headerForm.nombre_contrato || ''
+      // Priority: 1) user-selected project  2) codigo_proyecto  3) nombre_contrato  4) all
+      const projectFilter = mytrackProject || headerForm.codigo_proyecto || headerForm.nombre_contrato || ''
       const url = `${MYTRACK_API}?year=${proyecto.anio}&workspace=xul-ws-1`
         + (projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : '')
       const res  = await fetch(url)
@@ -87,17 +108,20 @@ export default function Proyecto() {
         }
       }
       if (count === 0) {
-        setSyncMsg('⚠️ Sin datos para este proyecto en MyTrack')
+        setSyncMsg('⚠️ Sin datos — elige el proyecto:')
+        loadMytrackProjects()
+        setShowMtPicker(true)
       } else {
         setGrid(g => ({ ...g, ...updated }))
         setDirty(true)
         setSyncMsg(`✓ Sincronizado · ${count} ${count === 1 ? 'mes' : 'meses'}`)
+        setTimeout(() => setSyncMsg(''), 5000)
       }
     } catch (e) {
       setSyncMsg(`✗ Error: ${e.message}`)
+      setTimeout(() => setSyncMsg(''), 5000)
     }
     setSyncingMytrack(false)
-    setTimeout(() => setSyncMsg(''), 5000)
   }
 
   useEffect(() => {
@@ -335,19 +359,61 @@ export default function Proyecto() {
       <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
         <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Datos mensuales · {proyecto.anio}</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {syncMsg && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Sync status message */}
+            {syncMsg && !showMtPicker && (
               <span style={{ fontSize: 12, fontWeight: 600, color: syncMsg.startsWith('✓') ? '#10B981' : '#EF4444' }}>
                 {syncMsg}
               </span>
             )}
+
+            {/* Project picker — shown when no match found or user clicks ✎ */}
+            {showMtPicker && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {syncMsg && (
+                  <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 600 }}>{syncMsg}</span>
+                )}
+                <select
+                  autoFocus
+                  value={mytrackProject}
+                  onChange={e => saveMtProject(e.target.value)}
+                  style={{
+                    fontSize: 11, borderRadius: 6, padding: '4px 8px',
+                    border: '1.5px solid #6366F155', background: 'var(--c-input-bg)',
+                    color: 'var(--c-text-1)', cursor: 'pointer', maxWidth: 200,
+                  }}
+                >
+                  <option value="">— Selecciona proyecto —</option>
+                  {mytrackProjects.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <button
+                  onClick={() => setShowMtPicker(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-3)', fontSize: 12, padding: 2 }}
+                  title="Cerrar"
+                >✕</button>
+              </div>
+            )}
+
+            {/* MyTrack source label (when a project is mapped) */}
+            {mytrackProject && !showMtPicker && (
+              <button
+                onClick={() => { setShowMtPicker(true); loadMytrackProjects() }}
+                title="Cambiar proyecto MyTrack"
+                style={{ fontSize: 10, color: 'var(--c-text-3)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}
+              >
+                {mytrackProject} ✎
+              </button>
+            )}
+
+            {/* Sync button */}
             <button
               onClick={syncFromMytrack}
               disabled={syncingMytrack}
               title="Sincronizar Coste Personal desde MyTrack"
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: syncingMytrack ? 'wait' : 'pointer',
+                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                cursor: syncingMytrack ? 'wait' : 'pointer',
                 border: '1.5px solid #6366F133',
                 background: '#6366F110', color: '#6366F1',
                 transition: 'all 0.15s',
