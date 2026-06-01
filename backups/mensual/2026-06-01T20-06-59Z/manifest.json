@@ -1,0 +1,5 @@
+{
+  "timestamp": "2026-06-01T20-06-59Z",
+  "type": "mensual",
+  "tables": ["eco_proyectos", "eco_entradas"]
+}
