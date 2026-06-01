@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, Edit2, Check, X, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Edit2, Check, X, Trash2, RefreshCw } from 'lucide-react'
+
+const MYTRACK_API = 'https://mytrack.xul.es/api/team-costs'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
@@ -57,7 +59,46 @@ export default function Proyecto() {
   const [editHeader, setEditHeader] = useState(false)
   const [headerForm, setHeaderForm] = useState(proyecto ? { ...proyecto } : {})
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [chartView, setChartView] = useState('mensual')
+  const [chartView, setChartView]         = useState('mensual')
+  const [syncingMytrack, setSyncingMytrack] = useState(false)
+  const [syncMsg, setSyncMsg]               = useState('')   // "Sincronizado · X meses" | error
+
+  async function syncFromMytrack() {
+    setSyncingMytrack(true)
+    setSyncMsg('')
+    try {
+      // Use codigo_proyecto as project filter; fall back to nombre_contrato
+      const projectFilter = headerForm.codigo_proyecto || headerForm.nombre_contrato || ''
+      const url = `${MYTRACK_API}?year=${proyecto.anio}&workspace=xul-ws-1`
+        + (projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : '')
+      const res  = await fetch(url)
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Error desconocido')
+
+      const { costs } = data   // { "2026-01": 7445.50, ... }
+      const updated = {}
+      let count = 0
+      for (let m = 1; m <= 12; m++) {
+        const key  = `${proyecto.anio}-${String(m).padStart(2, '0')}`
+        const cost = costs[key] ?? null
+        if (cost !== null) {
+          updated[`coste_personal-${m}`] = cost
+          count++
+        }
+      }
+      if (count === 0) {
+        setSyncMsg('⚠️ Sin datos para este proyecto en MyTrack')
+      } else {
+        setGrid(g => ({ ...g, ...updated }))
+        setDirty(true)
+        setSyncMsg(`✓ Sincronizado · ${count} ${count === 1 ? 'mes' : 'meses'}`)
+      }
+    } catch (e) {
+      setSyncMsg(`✗ Error: ${e.message}`)
+    }
+    setSyncingMytrack(false)
+    setTimeout(() => setSyncMsg(''), 5000)
+  }
 
   useEffect(() => {
     if (!proyecto) return
@@ -292,9 +333,33 @@ export default function Proyecto() {
 
       {/* Monthly grid */}
       <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
           <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Datos mensuales · {proyecto.anio}</p>
-          {dirty && <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B' }}>● Cambios sin guardar</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {syncMsg && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: syncMsg.startsWith('✓') ? '#10B981' : '#EF4444' }}>
+                {syncMsg}
+              </span>
+            )}
+            <button
+              onClick={syncFromMytrack}
+              disabled={syncingMytrack}
+              title="Sincronizar Coste Personal desde MyTrack"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: syncingMytrack ? 'wait' : 'pointer',
+                border: '1.5px solid #6366F133',
+                background: '#6366F110', color: '#6366F1',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { if (!syncingMytrack) { e.currentTarget.style.background = '#6366F120'; e.currentTarget.style.borderColor = '#6366F155' }}}
+              onMouseLeave={e => { e.currentTarget.style.background = '#6366F110'; e.currentTarget.style.borderColor = '#6366F133' }}
+            >
+              <RefreshCw size={13} style={{ animation: syncingMytrack ? 'spin 0.8s linear infinite' : 'none' }} />
+              {syncingMytrack ? 'Sincronizando…' : '↓ MyTrack'}
+            </button>
+            {dirty && <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B' }}>● Sin guardar</span>}
+          </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
