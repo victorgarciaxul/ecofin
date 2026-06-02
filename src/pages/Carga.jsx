@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Users, LayoutGrid, BarChart2, RefreshCw, Sparkles,
-  Copy, CheckCheck, X, AlertTriangle,
+  Copy, CheckCheck, X, AlertTriangle, Flame, Plus, Trash2,
 } from 'lucide-react'
 import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getUserGroups } from '../lib/clockify'
 import { useData } from '../context/DataContext'
@@ -260,6 +260,7 @@ export default function AnalisisTrabajo() {
           { id: 'persona',  Icon: Users,       label: 'Por persona'  },
           { id: 'proyecto', Icon: LayoutGrid,  label: 'Por proyecto' },
           { id: 'grafico',  Icon: BarChart2,   label: 'Gráficos'     },
+          { id: 'heatmap',  Icon: Flame,       label: 'Mapa de calor' },
         ].map(({ id, Icon, label }) => (
           <button key={id} onClick={() => setView(id)} style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -295,6 +296,7 @@ export default function AnalisisTrabajo() {
           {view === 'persona'  && <PersonaView  data={byUser}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} />}
           {view === 'proyecto' && <ProyectoView data={byProject} projectColorMap={projectColorMap} />}
           {view === 'grafico'  && <GraficoView  data={byTask}    projectColorMap={projectColorMap} totalSeconds={totalSeconds} byProject={byProject} userGroups={userGroups} proyectosEcofin={proyectosEcofin} />}
+          {view === 'heatmap'  && <HeatmapView proyectosEcofin={proyectosEcofin} />}
         </>
       )}
 
@@ -730,6 +732,331 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Mapa de calor ─────────────────────────────────────────────────────────────
+
+const HEAT_COLORS = {
+  0: { bg: '#FDE68A', text: '#92400E', label: 'Ninguna' },
+  1: { bg: '#FBBF24', text: '#78350F', label: 'Baja' },
+  2: { bg: '#DC2626', text: '#FFFFFF', label: 'Media' },
+  3: { bg: '#7F1D1D', text: '#FECACA', label: 'Alta' },
+}
+
+const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MONTH_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+
+function HeatmapView({ proyectosEcofin }) {
+  const currentYear = new Date().getFullYear()
+  const [year, setYear] = useState(currentYear)
+  const [startMonth, setStartMonth] = useState(new Date().getMonth())
+  const [numMonths, setNumMonths] = useState(4)
+  const [data, setData] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ecofin_heatmap') || '{}') } catch { return {} }
+  })
+  const [newProj, setNewProj] = useState('')
+  const [showAddRow, setShowAddRow] = useState(false)
+
+  // Persist
+  useEffect(() => {
+    localStorage.setItem('ecofin_heatmap', JSON.stringify(data))
+  }, [data])
+
+  const yearKey = String(year)
+  const yearData = data[yearKey] || {}
+  const projects = Object.keys(yearData)
+
+  // Generate month+week columns
+  const months = []
+  for (let i = 0; i < numMonths; i++) {
+    const mIdx = (startMonth + i) % 12
+    months.push({ idx: mIdx, name: MONTH_NAMES[mIdx], short: MONTH_SHORT[mIdx] })
+  }
+  const columns = []
+  for (const m of months) {
+    for (let w = 1; w <= 4; w++) {
+      columns.push({ key: `${m.idx}-${w}`, label: `Sem ${w}`, month: m.name, monthShort: m.short, monthIdx: m.idx, week: w })
+    }
+  }
+
+  function getValue(proj, colKey) {
+    return yearData[proj]?.[colKey] ?? 0
+  }
+
+  function cycleValue(proj, colKey) {
+    const current = getValue(proj, colKey)
+    const next = (current + 1) % 4
+    setData(prev => {
+      const yk = { ...(prev[yearKey] || {}) }
+      yk[proj] = { ...(yk[proj] || {}), [colKey]: next }
+      return { ...prev, [yearKey]: yk }
+    })
+  }
+
+  function addProject(name) {
+    if (!name.trim()) return
+    setData(prev => {
+      const yk = { ...(prev[yearKey] || {}) }
+      if (!yk[name.trim()]) yk[name.trim()] = {}
+      return { ...prev, [yearKey]: yk }
+    })
+    setNewProj('')
+    setShowAddRow(false)
+  }
+
+  function removeProject(name) {
+    if (!window.confirm(`¿Eliminar "${name}" del mapa de calor?`)) return
+    setData(prev => {
+      const yk = { ...(prev[yearKey] || {}) }
+      delete yk[name]
+      return { ...prev, [yearKey]: yk }
+    })
+  }
+
+  // Calculate monthly max (sum of 4 weeks) per project for the summary
+  const monthlySummary = projects.map(proj => {
+    const row = { name: proj }
+    for (const m of months) {
+      let sum = 0
+      for (let w = 1; w <= 4; w++) sum += getValue(proj, `${m.idx}-${w}`)
+      row[m.short] = sum
+    }
+    return row
+  }).sort((a, b) => {
+    const sumA = months.reduce((s, m) => s + (a[m.short] || 0), 0)
+    const sumB = months.reduce((s, m) => s + (b[m.short] || 0), 0)
+    return sumB - sumA
+  })
+
+  // Sort projects by total load
+  const sortedProjects = [...projects].sort((a, b) => {
+    const sumA = columns.reduce((s, c) => s + getValue(a, c.key), 0)
+    const sumB = columns.reduce((s, c) => s + getValue(b, c.key), 0)
+    return sumB - sumA
+  })
+
+  // EcoFin project names for autocomplete
+  const ecofinNames = (proyectosEcofin || []).map(p => p.nombre_contrato).filter(Boolean)
+  const availableNames = ecofinNames.filter(n => !projects.includes(n))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <select value={year} onChange={e => setYear(Number(e.target.value))}
+          style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', cursor: 'pointer' }}>
+          {[currentYear - 1, currentYear, currentYear + 1].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+
+        <select value={startMonth} onChange={e => setStartMonth(Number(e.target.value))}
+          style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', cursor: 'pointer' }}>
+          {MONTH_NAMES.map((m, i) => <option key={i} value={i}>Desde {m}</option>)}
+        </select>
+
+        <select value={numMonths} onChange={e => setNumMonths(Number(e.target.value))}
+          style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', cursor: 'pointer' }}>
+          {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n} meses</option>)}
+        </select>
+
+        <button onClick={() => setShowAddRow(true)}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+          <Plus size={13} /> Añadir proyecto
+        </button>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
+          <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontWeight: 600 }}>Escala:</span>
+          {[0, 1, 2, 3].map(v => (
+            <div key={v} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ width: 14, height: 14, borderRadius: 3, background: HEAT_COLORS[v].bg, border: '1px solid rgba(0,0,0,0.1)' }} />
+              <span style={{ fontSize: 10, color: 'var(--c-text-3)' }}>{v} {HEAT_COLORS[v].label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add project row */}
+      {showAddRow && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 10, padding: '10px 14px' }}>
+          <input
+            list="ecofin-proj-list"
+            value={newProj} onChange={e => setNewProj(e.target.value)}
+            placeholder="Nombre del proyecto…"
+            onKeyDown={e => { if (e.key === 'Enter') addProject(newProj) }}
+            autoFocus
+            style={{ flex: 1, padding: '7px 10px', borderRadius: 7, border: '1.5px solid var(--c-border)', background: 'var(--c-input-bg)', color: 'var(--c-text-1)', fontSize: 13, outline: 'none' }}
+          />
+          <datalist id="ecofin-proj-list">
+            {availableNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+          <button onClick={() => addProject(newProj)}
+            style={{ padding: '7px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: '#10B981', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            Añadir
+          </button>
+          <button onClick={() => { setShowAddRow(false); setNewProj('') }}
+            style={{ padding: '7px 10px', borderRadius: 7, fontSize: 12, background: 'var(--c-bg-muted)', color: 'var(--c-text-3)', border: '1px solid var(--c-border)', cursor: 'pointer' }}>
+            Cancelar
+          </button>
+        </div>
+      )}
+
+      {projects.length === 0 ? (
+        <Empty text="Aún no hay proyectos en el mapa de calor. Añade uno para empezar." />
+      ) : (
+        <>
+          {/* ── Heatmap semanal ── */}
+          <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)' }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text-1)' }}>
+                Carga de Trabajo Estimada por Semanas ({months[0]?.name} – {months[months.length - 1]?.name} {year})
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 2 }}>Clic en cada celda para cambiar el nivel de carga (0→1→2→3→0)</p>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: columns.length * 48 + 200 }}>
+                <thead>
+                  {/* Month headers */}
+                  <tr>
+                    <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--c-bg-surface)', borderBottom: '1px solid var(--c-border)', padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', minWidth: 160 }}>
+                      Proyectos / Clientes
+                    </th>
+                    {months.map(m => (
+                      <th key={m.idx} colSpan={4} style={{ borderBottom: '1px solid var(--c-border)', borderLeft: '2px solid var(--c-border)', padding: '6px 0', textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--c-text-1)', background: 'var(--c-bg-muted)' }}>
+                        {m.name}
+                      </th>
+                    ))}
+                    <th style={{ borderBottom: '1px solid var(--c-border)', width: 36 }} />
+                  </tr>
+                  {/* Week headers */}
+                  <tr>
+                    <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--c-bg-surface)', borderBottom: '1px solid var(--c-border)', padding: '4px 14px' }} />
+                    {columns.map((col, i) => (
+                      <th key={col.key} style={{
+                        borderBottom: '1px solid var(--c-border)',
+                        borderLeft: col.week === 1 ? '2px solid var(--c-border)' : '1px solid var(--c-border)',
+                        padding: '4px 2px', textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--c-text-4)', minWidth: 44
+                      }}>
+                        {col.label}
+                      </th>
+                    ))}
+                    <th style={{ borderBottom: '1px solid var(--c-border)' }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedProjects.map((proj, rowIdx) => (
+                    <tr key={proj}>
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 1, background: 'var(--c-bg-surface)',
+                        padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--c-text-1)',
+                        borderBottom: '1px solid var(--c-border)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180
+                      }}>
+                        {proj}
+                      </td>
+                      {columns.map(col => {
+                        const val = getValue(proj, col.key)
+                        const c = HEAT_COLORS[val]
+                        return (
+                          <td key={col.key}
+                            onClick={() => cycleValue(proj, col.key)}
+                            style={{
+                              padding: 0, textAlign: 'center', cursor: 'pointer',
+                              borderBottom: '1px solid var(--c-border)',
+                              borderLeft: col.week === 1 ? '2px solid var(--c-border)' : '1px solid rgba(0,0,0,0.06)',
+                            }}>
+                            <div style={{
+                              background: c.bg, color: c.text,
+                              fontSize: 13, fontWeight: 700,
+                              padding: '8px 2px',
+                              transition: 'background 0.15s',
+                              minHeight: 20,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              {val}
+                            </div>
+                          </td>
+                        )
+                      })}
+                      <td style={{ borderBottom: '1px solid var(--c-border)', padding: '0 6px' }}>
+                        <button onClick={() => removeProject(proj)} title="Eliminar"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', padding: 4, display: 'flex', borderRadius: 4 }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--c-text-4)'}>
+                          <Trash2 size={12} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Resumen mensual ── */}
+          <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 16, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--c-border)' }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-text-1)' }}>
+                Carga de Trabajo Máxima por Meses ({year})
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--c-text-3)', marginTop: 2 }}>Suma de las 4 semanas · Máximo posible: 12</p>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ position: 'sticky', left: 0, zIndex: 2, background: 'var(--c-bg-surface)', borderBottom: '1px solid var(--c-border)', padding: '8px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--c-text-3)', minWidth: 160 }}>
+                      Proyectos
+                    </th>
+                    {months.map(m => (
+                      <th key={m.idx} style={{ borderBottom: '1px solid var(--c-border)', borderLeft: '2px solid var(--c-border)', padding: '8px 12px', textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--c-text-1)', minWidth: 80 }}>
+                        {m.name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlySummary.map(row => (
+                    <tr key={row.name}>
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 1, background: 'var(--c-bg-surface)',
+                        padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--c-text-1)',
+                        borderBottom: '1px solid var(--c-border)', whiteSpace: 'nowrap'
+                      }}>
+                        {row.name}
+                      </td>
+                      {months.map(m => {
+                        const val = row[m.short] || 0
+                        // Map sum (0-12) to color intensity
+                        const level = val === 0 ? 0 : val <= 4 ? 1 : val <= 8 ? 2 : 3
+                        const c = HEAT_COLORS[level]
+                        return (
+                          <td key={m.idx} style={{
+                            borderBottom: '1px solid var(--c-border)',
+                            borderLeft: '2px solid var(--c-border)',
+                            padding: 0, textAlign: 'center',
+                          }}>
+                            <div style={{
+                              background: c.bg, color: c.text,
+                              fontSize: 14, fontWeight: 700,
+                              padding: '10px 8px',
+                            }}>
+                              {val}
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
