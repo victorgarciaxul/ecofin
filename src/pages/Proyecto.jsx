@@ -88,8 +88,9 @@ export default function Proyecto() {
     setSyncingMytrack(true)
     setSyncMsg('')
     try {
-      // Priority: 1) user-selected project  2) codigo_proyecto  3) nombre_contrato  4) all
-      const projectFilter = mytrackProject || headerForm.codigo_proyecto || headerForm.nombre_contrato || ''
+      // Priority: 1) user-selected project in picker  2) nombre_contrato (exact match)
+      // codigo_proyecto is intentionally excluded — it's an internal code, not a MyTrack project name
+      const projectFilter = mytrackProject || headerForm.nombre_contrato || ''
       const url = `${MYTRACK_API}?year=${proyecto.anio}&workspace=xul-ws-1`
         + (projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : '')
       const res  = await fetch(url)
@@ -97,13 +98,18 @@ export default function Proyecto() {
       if (!data.ok) throw new Error(data.error || 'Error desconocido')
 
       const { costs } = data   // { "2026-01": 7445.50, ... }
+
+      // Build a full 12-month reset: clear all coste_personal months first,
+      // then apply only what MyTrack returns — avoids mixing stale manual values
       const updated = {}
+      for (let m = 1; m <= 12; m++) updated[`coste_personal-${m}`] = 0
+
       let count = 0
       for (let m = 1; m <= 12; m++) {
         const key  = `${proyecto.anio}-${String(m).padStart(2, '0')}`
         const cost = costs[key] ?? null
         if (cost !== null) {
-          updated[`coste_personal-${m}`] = cost
+          updated[`coste_personal-${m}`] = Math.round(cost * 100) / 100
           count++
         }
       }
@@ -445,6 +451,9 @@ export default function Proyecto() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
                         <span style={{ fontWeight: 600, color: 'var(--c-text-1)', fontSize: 12 }}>{cat.label}</span>
+                        {cat.key === 'coste_personal' && mytrackProject && (
+                          <span title={`Datos de MyTrack · ${mytrackProject}`} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: '#6366F118', color: '#6366F1', border: '1px solid #6366F133', letterSpacing: '0.04em' }}>MT</span>
+                        )}
                       </div>
                     </td>
                     {MESES.map((_, mi) => {

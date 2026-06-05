@@ -157,18 +157,62 @@ export function DataProvider({ children }) {
   function importData(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const data = JSON.parse(e.target.result)
           if (!data.proyectos || !Array.isArray(data.proyectos)) {
             reject(new Error('Archivo no válido: no contiene proyectos'))
             return
           }
-          setProyectos(data.proyectos)
-          setEntradas(data.entradas || [])
-          resolve({ proyectos: data.proyectos.length, entradas: (data.entradas || []).length })
+
+          // Demo mode: just set state
+          if (isDemo) {
+            setProyectos(data.proyectos)
+            setEntradas(data.entradas || [])
+            resolve({ proyectos: data.proyectos.length, entradas: (data.entradas || []).length })
+            return
+          }
+
+          // Supabase mode: upsert everything
+          // 1. Upsert projects (match on codigo_proyecto + anio)
+          const proyectosToUpsert = data.proyectos.map(({ id: _id, ...p }) => p)
+          const { data: insertedProys, error: pErr } = await supabase
+            .from('eco_proyectos')
+            .upsert(proyectosToUpsert, { onConflict: 'codigo_proyecto,anio', ignoreDuplicates: false })
+            .select()
+          if (pErr) throw new Error('Error al importar proyectos: ' + pErr.message)
+
+          // 2. Reload projects to get fresh UUIDs
+          const { data: freshProys } = await supabase
+            .from('eco_proyectos').select('*').order('codigo_proyecto')
+          const proyMap = {}
+          freshProys.forEach(p => { proyMap[p.codigo_proyecto] = p.id })
+
+          // 3. Upsert entradas mapping old proyecto_id → new UUID via codigo_proyecto
+          // The import file may have old text IDs or UUIDs — resolve via codigo_proyecto
+          const oldIdToCode = {}
+          data.proyectos.forEach(p => { oldIdToCode[p.id] = p.codigo_proyecto })
+
+          const entradasToUpsert = (data.entradas || [])
+            .map(({ id: _id, created_at: _c, ...e }) => {
+              const code = oldIdToCode[e.proyecto_id]
+              const newId = code ? proyMap[code] : proyMap[e.proyecto_id]
+              return newId ? { ...e, proyecto_id: newId } : null
+            })
+            .filter(Boolean)
+
+          if (entradasToUpsert.length > 0) {
+            const { error: eErr } = await supabase
+              .from('eco_entradas')
+              .upsert(entradasToUpsert, { onConflict: 'proyecto_id,anio,mes,categoria' })
+            if (eErr) throw new Error('Error al importar entradas: ' + eErr.message)
+          }
+
+          // 4. Refresh local state from Supabase
+          await loadFromSupabase()
+          resolve({ proyectos: (insertedProys || proyectosToUpsert).length, entradas: entradasToUpsert.length })
         } catch (err) {
-          reject(new Error('Error al leer el archivo: ' + err.message))
+          reject(new Error('Error al importar: ' + err.message))
         }
       }
       reader.onerror = () => reject(new Error('Error al leer el archivo'))
