@@ -24,6 +24,7 @@ export default function Proyectos() {
   const [anio, setAnio]                   = useState(CURRENT_YEAR)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [vistaGlobal, setVistaGlobal]     = useState(false)
+  const [estadoFilter, setEstadoFilter]   = useState(null) // null = todos
 
   const proyAnio = proyectos.filter(p => p.anio === anio)
 
@@ -39,8 +40,9 @@ export default function Proyectos() {
   const rows = useMemo(() =>
     proyAnio
       .filter(p => !search || p.nombre_contrato.toLowerCase().includes(search.toLowerCase()) || p.cliente.toLowerCase().includes(search.toLowerCase()) || p.codigo_proyecto.includes(search))
+      .filter(p => !estadoFilter || p.estado === estadoFilter)
       .sort((a, b) => a.codigo_proyecto.localeCompare(b.codigo_proyecto)),
-  [proyAnio, search])
+  [proyAnio, search, estadoFilter])
 
   // Vista global: agrupa todos los años por código de proyecto
   const rowsGlobal = useMemo(() => {
@@ -61,8 +63,9 @@ export default function Proyectos() {
         return { ...latest, _pres: pres, _fact: fact, periodoLabel, multiYear: anios.length > 1, latestId: latest.id }
       })
       .filter(p => !search || p.nombre_contrato.toLowerCase().includes(search.toLowerCase()) || p.cliente.toLowerCase().includes(search.toLowerCase()) || p.codigo_proyecto.includes(search))
+      .filter(p => !estadoFilter || p.estado === estadoFilter)
       .sort((a, b) => a.codigo_proyecto.localeCompare(b.codigo_proyecto))
-  }, [proyectos, entradas, search]) // eslint-disable-line
+  }, [proyectos, entradas, search, estadoFilter]) // eslint-disable-line
 
   const activeRows = vistaGlobal ? rowsGlobal : rows
 
@@ -101,10 +104,24 @@ export default function Proyectos() {
         </div>
       </div>
 
-      <div style={{ position: 'relative', marginBottom: 20, maxWidth: 300 }}>
-        <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--c-text-4)' }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar…"
-          style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: 8, fontSize: 13, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', outline: 'none', boxSizing: 'border-box' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative' }}>
+          <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--c-text-4)' }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar…"
+            style={{ width: 260, padding: '8px 12px 8px 32px', borderRadius: 8, fontSize: 13, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[null, 'activo', 'preparado', 'cerrado'].map(est => {
+            const badge = est ? ESTADO_BADGE[est] : null
+            const active = estadoFilter === est
+            return (
+              <button key={est ?? 'todos'} onClick={() => setEstadoFilter(est)}
+                style={{ padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${active ? (badge?.color ?? 'var(--c-text-1)') : 'var(--c-border)'}`, background: active ? (badge ? badge.bg : 'var(--c-bg-muted)') : 'var(--c-bg-surface)', color: active ? (badge?.color ?? 'var(--c-text-1)') : 'var(--c-text-3)', transition: 'all 0.15s' }}>
+                {est ? badge.label : 'Todos'}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Banner vista global */}
