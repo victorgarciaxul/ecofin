@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts'
 import { useData } from '../context/DataContext'
-import { getProjects, getSummaryByProject, getUserGroups } from '../lib/clockify'
+import { getProjects, getSummaryByProject, getUserGroups } from '../lib/mytrack'
 
 const ESTADO_BADGE = {
   activo:    { label: 'Activo',    bg: '#10B98118', color: '#10B981' },
@@ -127,14 +127,13 @@ export default function Dashboard() {
 
   // Fetch Clockify groups totals
   useEffect(() => {
-    const wsId = localStorage.getItem('clockify_ws')
-    if (!wsId) return
+    const wsId = localStorage.getItem('mytrack_ws') || 'xul-ws-1'
     ;(async () => {
       try {
         const start = new Date(anio, 0, 1).toISOString()
         const end   = new Date(anio, 11, 31, 23, 59, 59, 999).toISOString()
         const [clockifyProjs, byProj, userGroupsData] = await Promise.all([
-          getProjects(wsId),
+          getProjects(wsId, start, end),
           getSummaryByProject(wsId, start, end),
           getUserGroups(wsId).catch(() => []),
         ])

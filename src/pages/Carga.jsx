@@ -3,7 +3,7 @@ import {
   Users, LayoutGrid, BarChart2, RefreshCw, Sparkles,
   Copy, CheckCheck, X, AlertTriangle, Flame, Plus, Trash2,
 } from 'lucide-react'
-import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getUserGroups } from '../lib/clockify'
+import { getWorkspaces, getProjects, getSummaryByUser, getSummaryByProject, getSummaryByTask, getUserGroups } from '../lib/mytrack'
 import { useData } from '../context/DataContext'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ function initials(name = '') {
 
 export default function AnalisisTrabajo() {
   const [workspaces, setWorkspaces]   = useState([])
-  const [wsId, setWsId]               = useState(() => localStorage.getItem('clockify_ws') || '')
+  const [wsId, setWsId]               = useState(() => localStorage.getItem('mytrack_ws') || '')
   const [period, setPeriod]           = useState('month')
   const [view, setView]               = useState('persona')
   const [loading, setLoading]         = useState(false)
@@ -89,7 +89,7 @@ export default function AnalisisTrabajo() {
         if (!wsId && ws.length > 0) {
           const id = ws[0].id
           setWsId(id)
-          localStorage.setItem('clockify_ws', id)
+          localStorage.setItem('mytrack_ws', id)
         }
       })
       .catch(e => setError(e.message))
@@ -223,7 +223,7 @@ export default function AnalisisTrabajo() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Workspace selector */}
           {workspaces.length > 1 && (
-            <select value={wsId} onChange={e => { setWsId(e.target.value); localStorage.setItem('clockify_ws', e.target.value) }}
+            <select value={wsId} onChange={e => { setWsId(e.target.value); localStorage.setItem('mytrack_ws', e.target.value) }}
               style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: 'var(--c-bg-surface)', color: 'var(--c-text-1)', cursor: 'pointer' }}>
               {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
@@ -286,7 +286,7 @@ export default function AnalisisTrabajo() {
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '48px 0', color: 'var(--c-text-3)' }}>
           <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2.5px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ fontSize: 13 }}>Cargando datos de Clockify…</span>
+          <span style={{ fontSize: 13 }}>Cargando datos de MyTrack…</span>
         </div>
       )}
 
@@ -700,7 +700,7 @@ function GraficoView({ data, projectColorMap, totalSeconds, byProject, userGroup
                   {isOpen && (
                     <div style={{ padding: '10px 20px 16px 42px', background: item.color + '07', borderTop: `1px solid ${item.color}22` }}>
                       {groups.length === 0 ? (
-                        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic', padding: '6px 0' }}>Sin grupos registrados en Clockify</p>
+                        <p style={{ fontSize: 12, color: 'var(--c-text-4)', fontStyle: 'italic', padding: '6px 0' }}>Sin grupos registrados en MyTrack</p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                           {groups.map((g, gi) => {
