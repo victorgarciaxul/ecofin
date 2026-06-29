@@ -16,7 +16,7 @@ function ProtectedRoute({ children }) {
       <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
     </div>
   )
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) { window.location.replace('https://appcenter.xul.es'); return null; }
   return <DataProvider>{children}</DataProvider>
 }
 
