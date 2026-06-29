@@ -67,8 +67,6 @@ export default function Proyecto() {
   )
   const [mytrackProjects, setMytrackProjects]   = useState([])
   const [showMtPicker, setShowMtPicker]         = useState(false)
-  const [mtRangeFrom, setMtRangeFrom]           = useState(1)
-  const [mtRangeTo, setMtRangeTo]               = useState(12)
 
   async function loadMytrackProjects() {
     try {
@@ -101,12 +99,13 @@ export default function Proyecto() {
 
       const { costs } = data   // { "2026-01": 7445.50, ... }
 
-      // Reset only months in the selected range, then apply MyTrack data
+      // Build a full 12-month reset: clear all coste_personal months first,
+      // then apply only what MyTrack returns — avoids mixing stale manual values
       const updated = {}
-      for (let m = mtRangeFrom; m <= mtRangeTo; m++) updated[`coste_personal-${m}`] = 0
+      for (let m = 1; m <= 12; m++) updated[`coste_personal-${m}`] = 0
 
       let count = 0
-      for (let m = mtRangeFrom; m <= mtRangeTo; m++) {
+      for (let m = 1; m <= 12; m++) {
         const key  = `${proyecto.anio}-${String(m).padStart(2, '0')}`
         const cost = costs[key] ?? null
         if (cost !== null) {
@@ -411,36 +410,6 @@ export default function Proyecto() {
                 {mytrackProject} ✎
               </button>
             )}
-
-            {/* Date range */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              {['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'].map((m, i) => {
-                const mes = i + 1
-                const inRange = mes >= mtRangeFrom && mes <= mtRangeTo
-                return (
-                  <button key={mes}
-                    onClick={() => {
-                      if (mes < mtRangeFrom || (mes === mtRangeFrom && mes === mtRangeTo)) {
-                        setMtRangeFrom(mes); setMtRangeTo(mes)
-                      } else if (mes < mtRangeTo || mes === mtRangeTo) {
-                        setMtRangeFrom(mes)
-                      } else {
-                        setMtRangeTo(mes)
-                      }
-                    }}
-                    onMouseDown={e => { if (e.detail > 1) e.preventDefault() }}
-                    title={m}
-                    style={{
-                      width: 28, height: 24, borderRadius: 5, fontSize: 9, fontWeight: 700,
-                      border: `1.5px solid ${inRange ? '#6366F155' : 'var(--c-border)'}`,
-                      background: inRange ? '#6366F118' : 'transparent',
-                      color: inRange ? '#6366F1' : 'var(--c-text-4)',
-                      cursor: 'pointer', transition: 'all 0.1s', padding: 0,
-                    }}
-                  >{m}</button>
-                )
-              })}
-            </div>
 
             {/* Sync button */}
             <button
