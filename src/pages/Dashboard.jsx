@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, BarChart2, Layers, Save } from 'lucide-react'
+import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, BarChart2, Layers, Save, CalendarCheck } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
@@ -333,7 +333,7 @@ export default function Dashboard() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button onClick={() => setSoloHastaHoy(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: soloHastaHoy ? '#10B98118' : 'var(--c-bg-surface)', color: soloHastaHoy ? '#10B981' : 'var(--c-text-2)', border: `1.5px solid ${soloHastaHoy ? '#10B98150' : 'var(--c-border)'}`, cursor: 'pointer', boxShadow: soloHastaHoy ? '0 2px 8px rgba(16,185,129,0.2)' : 'none' }}>
-            📅 A fecha de hoy
+            <CalendarCheck size={14} /> A fecha de hoy
           </button>
           <button onClick={() => setVistaGlobal(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: vistaGlobal ? '#7C4DFF18' : 'var(--c-bg-surface)', color: vistaGlobal ? '#7C4DFF' : 'var(--c-text-2)', border: `1.5px solid ${vistaGlobal ? '#7C4DFF50' : 'var(--c-border)'}`, cursor: 'pointer', boxShadow: vistaGlobal ? '0 2px 8px rgba(124,77,255,0.2)' : 'none' }}>
             <Layers size={14} /> Vista global
