@@ -237,7 +237,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? va.localeCompare(vb) : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter]) // eslint-disable-line
+  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy]) // eslint-disable-line
 
   // ── Vista global: agrupa todos los años por código de proyecto ────────────────
   const rowsGlobal = useMemo(() => {
@@ -272,7 +272,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? (va || '').localeCompare(vb || '') : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter]) // eslint-disable-line
+  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy]) // eslint-disable-line
 
   const activeRows = vistaGlobal ? rowsGlobal : rows
 
