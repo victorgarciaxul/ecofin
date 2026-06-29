@@ -14,6 +14,19 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (isDemo) {
+      // SSO: si AppCenter pasa el email en la URL, autologin directo
+      const params = new URLSearchParams(window.location.search)
+      const ssoEmail = params.get('sso_email')
+      if (ssoEmail) {
+        const allowed = ['victorgarcia@xul.es','carlagarcia@xul.es','tech@xul.es','josecastillo@xul.es']
+        if (allowed.includes(ssoEmail.toLowerCase())) {
+          sessionStorage.setItem('demo_auth', '1')
+          window.history.replaceState({}, '', window.location.pathname)
+          setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() })
+          setLoading(false)
+          return
+        }
+      }
       // Only restore session if user previously authenticated in this tab/session
       const ok = sessionStorage.getItem('demo_auth')
       setUser(ok ? DEMO_USER : null)

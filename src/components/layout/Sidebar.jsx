@@ -136,15 +136,6 @@ export default function Sidebar() {
             <p style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{userName}</p>
             <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Manager</p>
           </div>
-          <button
-            onClick={signOut}
-            title="Cerrar sesión"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', padding: 3, display: 'flex', borderRadius: 5, transition: 'color 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#EF4444'}
-            onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
-          >
-            <LogOut size={13} />
-          </button>
         </div>
       </div>
     </aside>
