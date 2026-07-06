@@ -40,7 +40,7 @@ function fmtK(n) {
 export default function Proyecto() {
   const { id }     = useParams()
   const navigate   = useNavigate()
-  const { proyectos, getEntradasProyecto, updateProyecto, deleteProyecto, saveEntradas } = useData()
+  const { proyectos, entradas, getEntradasProyecto, updateProyecto, deleteProyecto, saveEntradas } = useData()
 
   const proyecto = proyectos.find(p => p.id === id)
 
@@ -141,6 +141,15 @@ export default function Proyecto() {
     setHeaderForm({ ...proyecto })
     setConfirmDelete(false)
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-sync grid when Supabase entradas load/change (but not if user has unsaved edits)
+  useEffect(() => {
+    if (!proyecto || dirty) return
+    const g = {}
+    CATS.forEach(c => { for (let m = 1; m <= 12; m++) g[`${c.key}-${m}`] = 0 })
+    getEntradasProyecto(id, proyecto.anio).forEach(e => { g[`${e.categoria}-${e.mes}`] = Number(e.importe) })
+    setGrid(g)
+  }, [entradas]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!proyecto) return (
     <div style={{ padding: 48, textAlign: 'center' }}>
