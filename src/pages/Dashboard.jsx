@@ -124,6 +124,7 @@ export default function Dashboard() {
   }, [syncTopWidth])
   const [vistaGlobal, setVistaGlobal]             = useState(false)
   const [soloHastaHoy, setSoloHastaHoy]           = useState(false)
+  const [mesFilter, setMesFilter]                 = useState(null) // null = todos los meses
   const mesActual = new Date().getMonth() + 1 // 1-12
   const [clockifyGroups, setClockifyGroups]       = useState([])
 
@@ -191,8 +192,14 @@ export default function Dashboard() {
       .sort()
   }, [vistaGlobal, proyectos, proyAnio]) // eslint-disable-line
 
+  function mesCheck(x) {
+    if (mesFilter !== null) return x.mes === mesFilter
+    if (soloHastaHoy) return x.mes <= mesActual
+    return true
+  }
+
   function kpis(id) {
-    const e = entradas.filter(x => x.proyecto_id === id && (!soloHastaHoy || x.mes <= mesActual))
+    const e = entradas.filter(x => x.proyecto_id === id && mesCheck(x))
     const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
     const facturacion     = sum('facturacion')
     const coste_personal  = sum('coste_personal')
@@ -204,7 +211,7 @@ export default function Dashboard() {
   }
 
   function kpisForIds(ids) {
-    const e = entradas.filter(x => ids.includes(x.proyecto_id) && (!soloHastaHoy || x.mes <= mesActual))
+    const e = entradas.filter(x => ids.includes(x.proyecto_id) && mesCheck(x))
     const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
     const facturacion     = sum('facturacion')
     const coste_personal  = sum('coste_personal')
@@ -237,7 +244,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? va.localeCompare(vb) : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy]) // eslint-disable-line
+  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy, mesFilter]) // eslint-disable-line
 
   // ── Vista global: agrupa todos los años por código de proyecto ────────────────
   const rowsGlobal = useMemo(() => {
@@ -272,7 +279,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? (va || '').localeCompare(vb || '') : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy]) // eslint-disable-line
+  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy, mesFilter]) // eslint-disable-line
 
   const activeRows = vistaGlobal ? rowsGlobal : rows
 
@@ -328,7 +335,7 @@ export default function Dashboard() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.4px' }}>Dashboard · {anio}</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.4px' }}>Dashboard · {anio}{mesFilter !== null ? ` · ${['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][mesFilter-1]}` : ''}</h1>
           <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 2 }}>{rows.length} de {proyAnio.length} proyecto{proyAnio.length !== 1 ? 's' : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -492,6 +499,30 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* Month filter */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 4 }}>Mes</span>
+        <button onClick={() => setMesFilter(null)} style={{
+          padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+          background: mesFilter === null ? '#6366F1' : 'var(--c-bg-surface)',
+          color: mesFilter === null ? '#fff' : 'var(--c-text-3)',
+          border: `1.5px solid ${mesFilter === null ? '#6366F1' : 'var(--c-border)'}`,
+          boxShadow: mesFilter === null ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+        }}>Todos</button>
+        {['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'].map((m, i) => {
+          const active = mesFilter === i + 1
+          return (
+            <button key={m} onClick={() => setMesFilter(active ? null : i + 1)} style={{
+              padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+              background: active ? '#6366F1' : 'var(--c-bg-surface)',
+              color: active ? '#fff' : 'var(--c-text-3)',
+              border: `1.5px solid ${active ? '#6366F1' : 'var(--c-border)'}`,
+              boxShadow: active ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
+            }}>{m}</button>
+          )
+        })}
+      </div>
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
