@@ -500,29 +500,15 @@ export default function Dashboard() {
         )
       })()}
 
-      {/* Month filter */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 4 }}>Mes</span>
-        <button onClick={() => setMesFilter(null)} style={{
-          padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-          background: mesFilter === null ? '#6366F1' : 'var(--c-bg-surface)',
-          color: mesFilter === null ? '#fff' : 'var(--c-text-3)',
-          border: `1.5px solid ${mesFilter === null ? '#6366F1' : 'var(--c-border)'}`,
-          boxShadow: mesFilter === null ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
-        }}>Todos</button>
-        {['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'].map((m, i) => {
-          const active = mesFilter === i + 1
-          return (
-            <button key={m} onClick={() => setMesFilter(active ? null : i + 1)} style={{
-              padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-              background: active ? '#6366F1' : 'var(--c-bg-surface)',
-              color: active ? '#fff' : 'var(--c-text-3)',
-              border: `1.5px solid ${active ? '#6366F1' : 'var(--c-border)'}`,
-              boxShadow: active ? '0 2px 8px rgba(99,102,241,0.3)' : 'none',
-            }}>{m}</button>
-          )
-        })}
-      </div>
+      {/* Month timeline */}
+      <MonthTimeline
+        anio={anio}
+        entradas={entradas}
+        proyIds={(vistaGlobal ? proyectos : proyAnio).map(p => p.id)}
+        mesFilter={mesFilter}
+        mesActual={mesActual}
+        onChange={setMesFilter}
+      />
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -682,6 +668,101 @@ export default function Dashboard() {
           </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── MonthTimeline ─────────────────────────────────────────────────────────────
+
+const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const MESES_SHORT_TL = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
+
+function MonthTimeline({ anio, entradas, proyIds, mesFilter, mesActual, onChange }) {
+  const byMonth = useMemo(() => {
+    const result = Array(12).fill(0)
+    for (const e of entradas) {
+      if (e.categoria === 'facturacion' && e.anio === anio && proyIds.includes(e.proyecto_id)) {
+        result[e.mes - 1] += Number(e.importe) || 0
+      }
+    }
+    return result
+  }, [entradas, anio, proyIds])
+
+  const maxVal = Math.max(...byMonth, 1)
+
+  return (
+    <div style={{
+      background: 'var(--c-bg-surface)',
+      border: '1px solid var(--c-border)',
+      borderRadius: 14,
+      padding: '16px 20px',
+      marginBottom: 20,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-3)' }}>
+            {mesFilter !== null ? `${MESES_FULL[mesFilter - 1]} ${anio}` : `Todos los meses · ${anio}`}
+          </span>
+          {mesFilter !== null && (
+            <button onClick={() => onChange(null)} style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+              background: '#6366F115', color: '#6366F1', border: '1px solid #6366F130',
+              cursor: 'pointer',
+            }}>✕ Ver todos</button>
+          )}
+        </div>
+        <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontWeight: 500 }}>Facturación relativa por mes</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 6 }}>
+        {MESES_SHORT_TL.map((m, i) => {
+          const mes = i + 1
+          const isActive = mesFilter === mes
+          const isCurrent = mes === mesActual
+          const isPast = mes < mesActual
+          const hasData = byMonth[i] > 0
+          const barH = Math.max(4, Math.round((byMonth[i] / maxVal) * 36))
+
+          return (
+            <button
+              key={m}
+              onClick={() => onChange(isActive ? null : mes)}
+              title={`${MESES_FULL[i]} · ${hasData ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(byMonth[i]) : 'Sin datos'}`}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '8px 4px 6px',
+                borderRadius: 10,
+                border: `1.5px solid ${isActive ? '#6366F1' : isCurrent ? '#6366F140' : 'transparent'}`,
+                background: isActive ? '#6366F1' : isCurrent ? '#6366F108' : 'transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                outline: 'none',
+                position: 'relative',
+              }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = '#6366F10C'; e.currentTarget.style.borderColor = '#6366F140' }}}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = isCurrent ? '#6366F108' : 'transparent'; e.currentTarget.style.borderColor = isCurrent ? '#6366F140' : 'transparent' }}}
+            >
+              <div style={{ width: '100%', height: 36, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                <div style={{
+                  width: '55%', height: hasData ? barH : 3, borderRadius: 3,
+                  background: isActive ? 'rgba(255,255,255,0.65)'
+                    : hasData ? (isPast || isCurrent ? '#6366F1' : '#6366F145')
+                    : 'var(--c-border)',
+                  transition: 'height 0.3s ease',
+                }} />
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+                color: isActive ? '#fff' : isCurrent ? '#6366F1' : hasData ? 'var(--c-text-2)' : 'var(--c-text-4)',
+              }}>{m}</span>
+              {isCurrent && !isActive && (
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#6366F1', position: 'absolute', bottom: 3 }} />
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
