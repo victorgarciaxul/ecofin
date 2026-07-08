@@ -176,8 +176,13 @@ export default function Proyecto() {
 
   async function handleSave() {
     setSaving(true)
-    await saveEntradas(id, proyecto.anio, grid)
+    const { error } = await saveEntradas(id, proyecto.anio, grid) || {}
     setSaving(false)
+    if (error) {
+      setSyncMsg(`✗ ${error.message || 'Error al guardar'}`)
+      setTimeout(() => setSyncMsg(''), 6000)
+      return // sigue dirty para que el usuario pueda reintentar
+    }
     setDirty(false)
   }
 

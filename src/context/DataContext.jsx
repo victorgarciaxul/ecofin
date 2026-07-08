@@ -100,6 +100,11 @@ export function DataProvider({ children }) {
   }
 
   async function saveEntradas(proyectoId, anio, grid) {
+    // Nunca guardar mientras la carga inicial está en curso: el grid
+    // podría estar construido con datos incompletos y machacar la BD.
+    if (loading) {
+      return { error: { message: 'Los datos aún se están cargando. Espera unos segundos y vuelve a guardar.' } }
+    }
     // grid = { 'facturacion-1': 1000, 'coste_personal-2': 500, ... }
     const upserts = []
     const cats = ['facturacion','coste_personal','gastos_personal','produccion','plan_medios']
