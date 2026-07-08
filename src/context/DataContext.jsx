@@ -38,13 +38,29 @@ export function DataProvider({ children }) {
     if (!isDemo) loadFromSupabase()
   }, [isDemo])
 
+  // Supabase limita cada consulta a 1000 filas — paginar siempre,
+  // si no, las filas por encima del límite nunca llegan al cliente
+  // y un guardado posterior las machaca con ceros.
+  async function fetchAllRows(table) {
+    const PAGE = 1000
+    let all = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase.from(table).select('*')
+        .order('id').range(from, from + PAGE - 1)
+      if (error) return { data: null, error }
+      all = all.concat(data || [])
+      if (!data || data.length < PAGE) break
+    }
+    return { data: all, error: null }
+  }
+
   async function loadFromSupabase() {
     setLoading(true)
     const [{ data: pData }, { data: eData }] = await Promise.all([
-      supabase.from('eco_proyectos').select('*').order('codigo_proyecto'),
-      supabase.from('eco_entradas').select('*'),
+      fetchAllRows('eco_proyectos'),
+      fetchAllRows('eco_entradas'),
     ])
-    if (pData) setProyectos(pData)
+    if (pData) setProyectos([...pData].sort((a, b) => (a.codigo_proyecto || '').localeCompare(b.codigo_proyecto || '')))
     if (eData) setEntradas(eData)
     setLoading(false)
   }
