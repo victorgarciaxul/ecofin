@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, Edit2, Check, X, Trash2, RefreshCw } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const MYTRACK_API = 'https://mytrack.xul.es/api/team-costs'
 import {
@@ -41,6 +42,7 @@ export default function Proyecto() {
   const { id }     = useParams()
   const navigate   = useNavigate()
   const { proyectos, entradas, getEntradasProyecto, updateProyecto, deleteProyecto, saveEntradas } = useData()
+  const { isReadOnly } = useAuth()
 
   const proyecto = proyectos.find(p => p.id === id)
 
@@ -250,7 +252,7 @@ export default function Proyecto() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.3px' }}>{headerForm.nombre_contrato}</h1>
               <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span>
-              <button onClick={() => setEditHeader(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', padding: 2 }}><Edit2 size={13} /></button>
+              {!isReadOnly && <button onClick={() => setEditHeader(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-text-4)', padding: 2 }}><Edit2 size={13} /></button>}
             </div>
             <p style={{ fontSize: 13, color: 'var(--c-text-3)' }}>
               <span className="font-numeric" style={{ fontWeight: 700, color: '#F59E0B' }}>{headerForm.codigo_proyecto}</span>
@@ -312,6 +314,7 @@ export default function Proyecto() {
           </div>
         )}
 
+        {!isReadOnly && (
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={handleDelete}
             style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '9px 14px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: confirmDelete ? '#EF444418' : 'var(--c-bg-muted)', color: confirmDelete ? '#EF4444' : 'var(--c-text-3)', border: `1.5px solid ${confirmDelete ? '#EF444450' : 'var(--c-border)'}`, cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -322,6 +325,7 @@ export default function Proyecto() {
             <Save size={15} /> {saving ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Sin cambios'}
           </button>
         </div>
+        )}
       </div>
 
       {/* KPI cards */}
@@ -475,7 +479,7 @@ export default function Proyecto() {
                       const val = getVal(cat.key, mes)
                       return (
                         <td key={mes} style={{ padding: '5px 4px', textAlign: 'center' }}>
-                          <CellInput value={val} color={cat.color} onChange={v => setVal(cat.key, mes, v)} />
+                          <CellInput value={val} color={cat.color} onChange={v => setVal(cat.key, mes, v)} readOnly={isReadOnly} />
                         </td>
                       )
                     })}
@@ -647,18 +651,19 @@ function ClockifyGroups({ codigoProyecto, nombreContrato, anio }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CellInput({ value, color, onChange }) {
+function CellInput({ value, color, onChange, readOnly }) {
   const [focused, setFocused] = useState(false)
   const [local, setLocal]     = useState('')
 
   return (
     <input
       type="text" inputMode="decimal"
+      readOnly={readOnly}
       value={focused ? local : (value === 0 ? '' : value.toLocaleString('es-ES', { maximumFractionDigits: 0 }))}
       placeholder="—"
-      onFocus={() => { setFocused(true); setLocal(value === 0 ? '' : String(value)) }}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={() => { setFocused(false); onChange(local || '0') }}
+      onFocus={readOnly ? undefined : () => { setFocused(true); setLocal(value === 0 ? '' : String(value)) }}
+      onChange={readOnly ? undefined : e => setLocal(e.target.value)}
+      onBlur={readOnly ? undefined : () => { setFocused(false); onChange(local || '0') }}
       onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
       style={{
         width: 72, padding: '5px 6px', textAlign: 'right', fontSize: 12,

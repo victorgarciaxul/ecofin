@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, Cell, ReferenceLine,
 } from 'recharts'
 import { useData } from '../context/DataContext'
+import { useAuth } from '../context/AuthContext'
 import { getProjects, getSummaryByProject, getUserGroups } from '../lib/mytrack'
 
 const ESTADO_BADGE = {
@@ -97,6 +98,7 @@ const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 
 export default function Dashboard() {
   const { proyectos, entradas, exportData, importData } = useData()
+  const { isReadOnly } = useAuth()
   const importRef = useRef(null)
   const [importMsg, setImportMsg] = useState(null)
   const navigate = useNavigate()
@@ -358,9 +360,11 @@ export default function Dashboard() {
           <button onClick={exportData} title="Descargar copia de seguridad completa (JSON)" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: '#3B82F618', color: '#3B82F6', border: '1.5px solid #3B82F650', cursor: 'pointer' }}>
             <Save size={14} /> Backup
           </button>
+          {!isReadOnly && (
           <button onClick={() => importRef.current?.click()} title="Restaurar datos desde copia de seguridad" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'var(--c-bg-surface)', color: 'var(--c-text-2)', border: '1.5px solid var(--c-border)', cursor: 'pointer' }}>
             <Upload size={14} /> Restaurar
           </button>
+          )}
           <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={async (e) => {
             const file = e.target.files?.[0]
             if (!file) return
@@ -375,9 +379,11 @@ export default function Dashboard() {
             }
             e.target.value = ''
           }} />
+          {!isReadOnly && (
           <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
             <Plus size={14} /> Nuevo proyecto
           </button>
+          )}
         </div>
       </div>
 

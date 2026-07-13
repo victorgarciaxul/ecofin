@@ -1,8 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { DEMO_PROYECTOS, DEMO_ENTRADAS } from '../lib/demoData'
+import { useAuth } from './AuthContext'
 
 const DataContext = createContext({})
+
+const READONLY_ERR = { error: { message: 'Acceso de solo lectura: no tienes permiso para modificar datos.' } }
 
 function initFromStorage(key, fallback) {
   try {
@@ -15,6 +18,7 @@ function initFromStorage(key, fallback) {
 
 export function DataProvider({ children }) {
   const isDemo = !isSupabaseConfigured
+  const { isReadOnly } = useAuth()
 
   const [proyectos, setProyectos] = useState(() =>
     initFromStorage('ecofin_proyectos', DEMO_PROYECTOS)
@@ -68,6 +72,7 @@ export function DataProvider({ children }) {
   // ── Mutations ─────────────────────────────────────────
 
   async function addProyecto(data) {
+    if (isReadOnly) return { data: null, ...READONLY_ERR }
     if (isDemo) {
       const nuevo = { ...data, id: `p${Date.now()}` }
       setProyectos(prev => [...prev, nuevo])
@@ -79,6 +84,7 @@ export function DataProvider({ children }) {
   }
 
   async function updateProyecto(id, patch) {
+    if (isReadOnly) return READONLY_ERR
     if (isDemo) {
       setProyectos(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p))
       return { error: null }
@@ -89,6 +95,7 @@ export function DataProvider({ children }) {
   }
 
   async function deleteProyecto(id) {
+    if (isReadOnly) return READONLY_ERR
     if (isDemo) {
       setProyectos(prev => prev.filter(p => p.id !== id))
       setEntradas(prev => prev.filter(e => e.proyecto_id !== id))
@@ -100,6 +107,7 @@ export function DataProvider({ children }) {
   }
 
   async function saveEntradas(proyectoId, anio, grid) {
+    if (isReadOnly) return READONLY_ERR
     // Nunca guardar mientras la carga inicial está en curso: el grid
     // podría estar construido con datos incompletos y machacar la BD.
     if (loading) {

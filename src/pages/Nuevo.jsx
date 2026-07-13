@@ -1,13 +1,15 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import { useAuth } from '../context/AuthContext'
 
 const CURRENT_YEAR = new Date().getFullYear()
 
 export default function Nuevo() {
   const navigate = useNavigate()
   const { addProyecto } = useData()
+  const { isReadOnly } = useAuth()
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     codigo_proyecto: '', codigo_contrato: '', nombre_contrato: '',
@@ -15,6 +17,9 @@ export default function Nuevo() {
     anio: CURRENT_YEAR, presupuesto_base: '', ampliaciones: '', estado: 'activo',
   })
   const [errors, setErrors] = useState({})
+
+  // Los usuarios de solo lectura no pueden crear proyectos
+  if (isReadOnly) return <Navigate to="/dashboard" replace />
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: null })) }
 

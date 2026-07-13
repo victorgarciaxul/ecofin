@@ -5,6 +5,13 @@ const DEMO_EMAIL = 'pruebas@xul.es'
 const DEMO_PASS  = 'Xul14$'
 const DEMO_USER  = { id: 'demo', email: DEMO_EMAIL, user_metadata: { full_name: 'Demo Manager' } }
 
+// Acceso completo (pueden editar)
+const FULL_ACCESS_EMAILS = ['victorgarcia@xul.es','carlagarcia@xul.es','tech@xul.es','josecastillo@xul.es']
+// Solo lectura (pueden ver, no editar)
+const READONLY_EMAILS = ['inmaosuna@xul.es']
+// Todos los que pueden entrar vía SSO
+const SSO_ALLOWED = [...FULL_ACCESS_EMAILS, ...READONLY_EMAILS]
+
 const AuthContext = createContext({})
 
 export function AuthProvider({ children }) {
@@ -17,8 +24,7 @@ export function AuthProvider({ children }) {
     const params   = new URLSearchParams(window.location.search)
     const ssoEmail = params.get('sso_email')
     if (ssoEmail) {
-      const allowed = ['victorgarcia@xul.es','carlagarcia@xul.es','tech@xul.es','josecastillo@xul.es']
-      if (allowed.includes(ssoEmail.toLowerCase())) {
+      if (SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
         sessionStorage.setItem('demo_auth', '1')
         window.history.replaceState({}, '', window.location.pathname)
         setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() })
@@ -65,8 +71,10 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  const isReadOnly = !!user?.email && READONLY_EMAILS.includes(user.email.toLowerCase())
+
   return (
-    <AuthContext.Provider value={{ user, loading, isDemo, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isDemo, isReadOnly, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )

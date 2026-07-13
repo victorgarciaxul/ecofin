@@ -14,7 +14,7 @@ const NAV = [
 ]
 
 export default function Sidebar() {
-  const { user, signOut } = useAuth()
+  const { user, signOut, isReadOnly } = useAuth()
   const location = useLocation()
   const navigate  = useNavigate()
   const userName  = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuario'
@@ -99,7 +99,8 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* Nuevo proyecto */}
+        {/* Nuevo proyecto (oculto en modo solo lectura) */}
+        {!isReadOnly && (
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={() => navigate('/proyectos/nuevo')}
@@ -117,6 +118,7 @@ export default function Sidebar() {
             <Plus size={13} /> Nuevo proyecto
           </button>
         </div>
+        )}
       </nav>
 
       {/* User */}
@@ -134,7 +136,7 @@ export default function Sidebar() {
           }}>{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{userName}</p>
-            <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Manager</p>
+            <p style={{ fontSize: 10, color: isReadOnly ? '#F5A623' : 'rgba(255,255,255,0.3)' }}>{isReadOnly ? 'Solo lectura' : 'Manager'}</p>
           </div>
         </div>
       </div>

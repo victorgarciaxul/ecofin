@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Trash2, Layers } from 'lucide-react'
 import { useData } from '../context/DataContext'
+import { useAuth } from '../context/AuthContext'
 
 const ESTADO_BADGE = {
   activo:    { label: 'Activo',    bg: '#10B98118', color: '#10B981' },
@@ -19,6 +20,7 @@ const YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]
 
 export default function Proyectos() {
   const { proyectos, entradas, deleteProyecto } = useData()
+  const { isReadOnly } = useAuth()
   const navigate = useNavigate()
   const [search, setSearch]               = useState('')
   const [anio, setAnio]                   = useState(CURRENT_YEAR)
@@ -98,9 +100,9 @@ export default function Proyectos() {
             style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: vistaGlobal ? 'var(--c-bg-muted)' : 'var(--c-bg-surface)', color: vistaGlobal ? 'var(--c-text-4)' : 'var(--c-text-1)', cursor: vistaGlobal ? 'default' : 'pointer', opacity: vistaGlobal ? 0.5 : 1 }}>
             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
+          {!isReadOnly && <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
             <Plus size={14} /> Nuevo proyecto
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -143,9 +145,9 @@ export default function Proyectos() {
             <>
               <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--c-text-2)', marginBottom: 6 }}>No hay proyectos en {anio}</p>
               <p style={{ fontSize: 13, color: 'var(--c-text-4)', marginBottom: 20 }}>Crea el primero o cambia el año del filtro</p>
-              <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
+              {!isReadOnly && <button onClick={() => navigate('/proyectos/nuevo')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600, background: 'linear-gradient(135deg,#F59E0B,#EF4444)', color: '#fff', border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(245,158,11,0.3)' }}>
                 <Plus size={14} /> Nuevo proyecto
-              </button>
+              </button>}
             </>
           )}
         </div>
@@ -181,13 +183,13 @@ export default function Proyectos() {
                   ) : (
                     <>
                       <span style={{ padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span>
-                      <button onClick={e => handleDelete(e, p.id)} title={deleting ? 'Confirmar borrado' : 'Eliminar proyecto'}
+                      {!isReadOnly && <button onClick={e => handleDelete(e, p.id)} title={deleting ? 'Confirmar borrado' : 'Eliminar proyecto'}
                         style={{ background: deleting ? '#EF444420' : 'none', border: 'none', cursor: 'pointer', color: deleting ? '#EF4444' : 'var(--c-text-4)', padding: '3px 5px', borderRadius: 5, display: 'flex', alignItems: 'center', fontSize: 11, gap: 3, fontWeight: deleting ? 700 : 400 }}
                         onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.color = '#EF4444' }}
                         onMouseLeave={e => { e.stopPropagation(); e.currentTarget.style.color = deleting ? '#EF4444' : 'var(--c-text-4)' }}
                       >
                         <Trash2 size={12} /> {deleting && 'Confirmar'}
-                      </button>
+                      </button>}
                     </>
                   )}
                 </div>
