@@ -1,25 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import {
-  format, startOfDay, endOfDay, startOfWeek, endOfWeek,
+  format, startOfDay, endOfDay,
   startOfMonth, endOfMonth, startOfYear, endOfYear,
-  subWeeks, subMonths, subYears, addDays, subDays, addMonths,
+  subMonths, subYears, addDays, subDays, addMonths,
   isSameDay, getDaysInMonth, getDay,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 const WEEK_DAYS = ['lu', 'ma', 'mi', 'ju', 'vi', 'sá', 'do']
 
+// ECOFIN guarda los datos por mes, no por día: el mínimo tramo con sentido es "un mes".
+// Por eso no hay presets de día/semana (serían engañosos: mostrarían el mes entero igualmente).
 function makePresets() {
   const now = new Date()
   return [
-    { label: 'Hoy',                    from: startOfDay(now),                                      to: endOfDay(now) },
-    { label: 'Ayer',                   from: startOfDay(subDays(now, 1)),                          to: endOfDay(subDays(now, 1)) },
-    { label: 'Esta semana',            from: startOfWeek(now, { weekStartsOn: 1 }),                to: endOfWeek(now, { weekStartsOn: 1 }) },
-    { label: 'La semana pasada',       from: startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }),   to: endOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }) },
-    { label: 'Las últimas dos semanas',from: startOfWeek(subWeeks(now, 1), { weekStartsOn: 1 }),   to: endOfWeek(now, { weekStartsOn: 1 }) },
     { label: 'Este mes',               from: startOfMonth(now),                                    to: endOfMonth(now) },
     { label: 'El mes pasado',          from: startOfMonth(subMonths(now, 1)),                      to: endOfMonth(subMonths(now, 1)) },
+    { label: 'Últimos 3 meses',        from: startOfMonth(subMonths(now, 2)),                      to: endOfMonth(now) },
+    { label: 'Últimos 6 meses',        from: startOfMonth(subMonths(now, 5)),                      to: endOfMonth(now) },
     { label: 'Este año',               from: startOfYear(now),                                     to: endOfYear(now) },
     { label: 'El año pasado',          from: startOfYear(subYears(now, 1)),                        to: endOfYear(subYears(now, 1)) },
   ]
