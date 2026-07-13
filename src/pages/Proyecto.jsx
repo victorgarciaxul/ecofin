@@ -1,18 +1,14 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, Edit2, Check, X, Trash2, RefreshCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import RangoMeses from '../components/RangoMeses'
 
 const MYTRACK_API = 'https://mytrack.xul.es/api/team-costs'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from 'recharts'
 import { useData } from '../context/DataContext'
 import { getProjects, getSummaryByProject, getUserGroups } from '../lib/clockify'
 
 const MESES     = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
-const MESES_SHORT = ['E','F','M','A','M','J','J','A','S','O','N','D']
 
 const CATS = [
   { key: 'facturacion',     label: 'Facturación',     color: '#10B981' },
@@ -31,11 +27,6 @@ const ESTADO_MAP = {
 function fmt(n) {
   if (n == null || isNaN(n)) return '—'
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
-}
-
-function fmtK(n) {
-  if (!n || isNaN(n)) return '0'
-  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(Math.round(n))
 }
 
 export default function Proyecto() {
@@ -58,10 +49,12 @@ export default function Proyecto() {
   const [grid, setGrid]           = useState(initGrid)
   const [dirty, setDirty]         = useState(false)
   const [saving, setSaving]       = useState(false)
+  // Rango de meses de análisis (1-12). Por defecto: año completo.
+  const [desde, setDesde]         = useState(1)
+  const [hasta, setHasta]         = useState(12)
   const [editHeader, setEditHeader] = useState(false)
   const [headerForm, setHeaderForm] = useState(proyecto ? { ...proyecto } : {})
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [chartView, setChartView]         = useState('mensual')
   const [syncingMytrack, setSyncingMytrack]     = useState(false)
   const [syncMsg, setSyncMsg]                   = useState('')
   const [mytrackProject, setMytrackProject]     = useState(() =>
@@ -166,14 +159,18 @@ export default function Proyecto() {
     setGrid(g => ({ ...g, [`${cat}-${mes}`]: importe }))
     setDirty(true)
   }
-  function rowTotal(cat) { return MESES.reduce((a, _, i) => a + getVal(cat, i + 1), 0) }
+  // Total de una categoría dentro del rango de meses seleccionado
+  const mesEnRango = m => m >= desde && m <= hasta
+  function rowTotal(cat) { return MESES.reduce((a, _, i) => mesEnRango(i + 1) ? a + getVal(cat, i + 1) : a, 0) }
 
   const facturacion     = rowTotal('facturacion')
   const coste_personal  = rowTotal('coste_personal')
   const gastos_personal = rowTotal('gastos_personal')
   const produccion      = rowTotal('produccion')
   const plan_medios     = rowTotal('plan_medios')
-  const beneficio       = facturacion - coste_personal - gastos_personal - produccion - plan_medios
+  // Proveedores = Plan de Medios + Gastos de Personal · Beneficio = Facturación − Coste Personal − Proveedores
+  const proveedores     = plan_medios + gastos_personal
+  const beneficio       = facturacion - coste_personal - proveedores
   const presupuesto     = Number(headerForm.presupuesto_base || 0) + Number(headerForm.ampliaciones || 0)
 
   async function handleSave() {
@@ -210,32 +207,21 @@ export default function Proyecto() {
     navigate('/proyectos')
   }
 
-  // Chart data
-  const chartData = useMemo(() => {
-    let acFact = 0, acBen = 0
-    return MESES.map((m, i) => {
-      const mes  = i + 1
-      const fact = getVal('facturacion', mes)
-      const cp   = getVal('coste_personal', mes)
-      const gp   = getVal('gastos_personal', mes)
-      const prod = getVal('produccion', mes)
-      const pm   = getVal('plan_medios', mes)
-      const ben  = fact - cp - gp - prod - pm
-      acFact += fact
-      acBen  += ben
-      return { mes: MESES_SHORT[i], facturacion: fact, coste: cp + gp, produccion: prod, plan_medios: pm, beneficio: ben, acFact, acBen }
-    }).filter(d => d.facturacion > 0 || d.coste > 0 || d.produccion > 0 || d.plan_medios > 0)
-  }, [grid])
-
   const badge = ESTADO_MAP[proyecto.estado] || ESTADO_MAP.activo
 
+  // Misma secuencia que el Dashboard: Previsión · Facturación · Coste Personal · Proveedores · Beneficio
   const kpiCards = [
     { label: 'Previsión anual', value: fmt(presupuesto),    color: '#7C4DFF' },
     { label: 'Facturación',    value: fmt(facturacion),    sub: presupuesto ? `${((facturacion / presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
-    { label: 'Coste Personal', value: fmt(coste_personal), sub: facturacion ? `${((coste_personal / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#7C4DFF' },
-    { label: 'Producción',     value: fmt(produccion),     sub: facturacion ? `${((produccion / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
-    { label: 'Plan Medios',    value: fmt(plan_medios),    sub: facturacion ? `${((plan_medios / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#EF4444' },
+    { label: 'Coste Personal', value: fmt(coste_personal), sub: facturacion ? `${((coste_personal / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#6366F1' },
+    { label: 'Proveedores',    value: fmt(proveedores),    sub: facturacion ? `${((proveedores / facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
     { label: 'Beneficio',      value: fmt(beneficio),      sub: facturacion ? `${((beneficio / facturacion) * 100).toFixed(1)}% ganancia` : null, color: beneficio >= 0 ? '#10B981' : '#EF4444' },
+  ]
+
+  // Desglose de Proveedores (Producción): % sobre Proveedores
+  const subPills = [
+    { label: 'Plan de Medios',  value: plan_medios,     color: '#EF4444' },
+    { label: 'Gastos Personal', value: gastos_personal, color: '#8B5CF6' },
   ]
 
   return (
@@ -329,7 +315,7 @@ export default function Proyecto() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 12 }}>
         {kpiCards.map(c => (
           <div key={c.label} style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 10, padding: '14px 16px' }}>
             <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--c-text-3)', marginBottom: 5 }}>{c.label}</p>
@@ -339,45 +325,21 @@ export default function Proyecto() {
         ))}
       </div>
 
-      {/* Chart */}
-      {chartData.length > 0 && (
-        <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '20px 24px', marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Evolución mensual</p>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[['mensual','Mensual'],['acumulado','Acumulado']].map(([v, l]) => (
-                <button key={v} onClick={() => setChartView(v)}
-                  style={{ padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${chartView === v ? '#F59E0B' : 'var(--c-border)'}`, background: chartView === v ? '#F59E0B18' : 'transparent', color: chartView === v ? '#F59E0B' : 'var(--c-text-3)' }}>{l}</button>
-              ))}
+      {/* Desglose de Proveedores (Producción): % sobre Proveedores */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Producción</span>
+        {subPills.map(p => {
+          const pct = proveedores ? ((p.value / proveedores) * 100).toFixed(1) : null
+          return (
+            <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 20, padding: '4px 12px' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{p.label}</span>
+              <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
+              {pct && <span className="font-numeric" style={{ fontSize: 10, fontWeight: 600, color: p.color, opacity: 0.7 }}>({pct}%)</span>}
             </div>
-          </div>
-          <ResponsiveContainer width="100%" height={220}>
-            {chartView === 'mensual' ? (
-              <BarChart data={chartData} barCategoryGap="25%" barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
-                <Tooltip formatter={(v, n) => [new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v), n]} labelStyle={{ fontWeight: 700, color: 'var(--c-text-1)' }} contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk' }} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="coste"       name="Coste Personal" fill="#7C4DFF" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="produccion"  name="Producción" fill="#F59E0B" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="beneficio"   name="Beneficio" fill="#06B6D4" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            ) : (
-              <BarChart data={chartData} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" vertical={false} />
-                <XAxis dataKey="mes" tick={{ fontSize: 11, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
-                <Tooltip formatter={(v, n) => [new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v), n]} labelStyle={{ fontWeight: 700 }} contentStyle={{ borderRadius: 10, border: '1px solid var(--c-border)', fontSize: 12, fontFamily: 'Space Grotesk' }} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar dataKey="acFact" name="Facturación acum." fill="#10B981" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="acBen"  name="Beneficio acum." fill="#06B6D4" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </div>
-      )}
+          )
+        })}
+      </div>
 
       {/* Monthly grid */}
       <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, overflow: 'hidden' }}>
@@ -451,12 +413,17 @@ export default function Proyecto() {
             {dirty && <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B' }}>● Sin guardar</span>}
           </div>
         </div>
+        {/* Rango de meses de análisis */}
+        <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)' }}>Rango de análisis</span>
+          <RangoMeses desde={desde} hasta={hasta} onChange={(d, h) => { setDesde(d); setHasta(h) }} size="sm" />
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: 'var(--c-bg-muted)' }}>
                 <th style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 130, position: 'sticky', left: 0, background: 'var(--c-bg-muted)', zIndex: 2 }}>Categoría</th>
-                {MESES.map(m => <th key={m} style={{ padding: '9px 6px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 78 }}>{m}</th>)}
+                {MESES.map((m, mi) => <th key={m} style={{ padding: '9px 6px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 78, opacity: mesEnRango(mi + 1) ? 1 : 0.35 }}>{m}</th>)}
                 <th style={{ padding: '9px 14px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--c-text-3)', borderBottom: '2px solid var(--c-border)', minWidth: 100, borderLeft: '1px solid var(--c-border)' }}>Total</th>
               </tr>
             </thead>
@@ -478,7 +445,7 @@ export default function Proyecto() {
                       const mes = mi + 1
                       const val = getVal(cat.key, mes)
                       return (
-                        <td key={mes} style={{ padding: '5px 4px', textAlign: 'center' }}>
+                        <td key={mes} style={{ padding: '5px 4px', textAlign: 'center', opacity: mesEnRango(mes) ? 1 : 0.35 }}>
                           <CellInput value={val} color={cat.color} onChange={v => setVal(cat.key, mes, v)} readOnly={isReadOnly} />
                         </td>
                       )
@@ -495,9 +462,10 @@ export default function Proyecto() {
                 <td style={{ padding: '11px 14px', fontWeight: 700, fontSize: 12, color: 'var(--c-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', position: 'sticky', left: 0, background: 'var(--c-bg-muted)' }}>Beneficio</td>
                 {MESES.map((_, mi) => {
                   const mes = mi + 1
-                  const b = getVal('facturacion', mes) - getVal('coste_personal', mes) - getVal('gastos_personal', mes) - getVal('produccion', mes) - getVal('plan_medios', mes)
+                  // Beneficio = Facturación − Coste Personal − Proveedores (Plan de Medios + Gastos de Personal)
+                  const b = getVal('facturacion', mes) - getVal('coste_personal', mes) - getVal('gastos_personal', mes) - getVal('plan_medios', mes)
                   return (
-                    <td key={mes} className="font-numeric" style={{ padding: '11px 4px', textAlign: 'center', fontWeight: 700, fontSize: 12, color: b > 0 ? '#10B981' : b < 0 ? '#EF4444' : 'var(--c-text-4)' }}>
+                    <td key={mes} className="font-numeric" style={{ padding: '11px 4px', textAlign: 'center', fontWeight: 700, fontSize: 12, color: b > 0 ? '#10B981' : b < 0 ? '#EF4444' : 'var(--c-text-4)', opacity: mesEnRango(mes) ? 1 : 0.35 }}>
                       {b !== 0 ? b.toLocaleString('es-ES', { maximumFractionDigits: 0 }) : '—'}
                     </td>
                   )

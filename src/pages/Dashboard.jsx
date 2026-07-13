@@ -1,12 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, BarChart2, Layers, Save, CalendarCheck } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, ReferenceLine,
-} from 'recharts'
+import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, Layers, Save } from 'lucide-react'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
+import RangoMeses from '../components/RangoMeses'
 import { getProjects, getSummaryByProject, getUserGroups } from '../lib/mytrack'
 
 const ESTADO_BADGE = {
@@ -65,26 +62,24 @@ function grpColor(name = '') {
   return `hsl(${(n * 83 + 41) % 360}, 52%, 54%)`
 }
 
-function fmtK(n) {
-  if (!n || isNaN(n)) return '0'
-  if (Math.abs(n) >= 100000) return `${(n / 1000).toFixed(0)}k`
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(Math.round(n))
-}
-
 function exportCSV(rows, anio) {
-  const headers = ['Código','Contrato','Cliente','Responsable','Gestor','Estado','Previsión anual','Facturado','% Ejec.','Coste Personal','% CP','Gastos Personal','Producción','% Prod.','Plan Medios','% PM','Beneficio','% Beneficio']
+  const headers = ['Código','Contrato','Cliente','Responsable','Gestor','Estado','Previsión anual','Facturado','% Ejec.','Coste Personal','% CP','Proveedores','% Prov.','Plan Medios','% s/Prov','Gastos Personal','% s/Prov','Producción','Beneficio','% Beneficio']
   const pct = (num, den) => den ? ((num / den) * 100).toFixed(2) + '%' : '—'
-  const lines = rows.map(p => [
-    p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`,
-    `"${p.responsable_contrato || ''}"`, `"${p.gestor_proyecto || ''}"`, p.estado,
-    p.presupuesto.toFixed(2), p.facturacion.toFixed(2),
-    pct(p.facturacion, p.presupuesto),
-    p.coste_personal.toFixed(2), pct(p.coste_personal, p.facturacion),
-    p.gastos_personal.toFixed(2),
-    p.produccion.toFixed(2), pct(p.produccion, p.facturacion),
-    p.plan_medios.toFixed(2), pct(p.plan_medios, p.facturacion),
-    p.beneficio.toFixed(2), pct(p.beneficio, p.facturacion),
-  ].join(';'))
+  const lines = rows.map(p => {
+    const proveedores = p.plan_medios + p.gastos_personal
+    return [
+      p.codigo_proyecto, `"${p.nombre_contrato}"`, `"${p.cliente}"`,
+      `"${p.responsable_contrato || ''}"`, `"${p.gestor_proyecto || ''}"`, p.estado,
+      p.presupuesto.toFixed(2), p.facturacion.toFixed(2),
+      pct(p.facturacion, p.presupuesto),
+      p.coste_personal.toFixed(2), pct(p.coste_personal, p.facturacion),
+      proveedores.toFixed(2), pct(proveedores, p.facturacion),
+      p.plan_medios.toFixed(2), pct(p.plan_medios, proveedores),
+      p.gastos_personal.toFixed(2), pct(p.gastos_personal, proveedores),
+      p.produccion.toFixed(2),
+      p.beneficio.toFixed(2), pct(p.beneficio, p.facturacion),
+    ].join(';')
+  })
   const csv = [headers.join(';'), ...lines].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const a = document.createElement('a')
@@ -108,7 +103,6 @@ export default function Dashboard() {
   const [estadoFilter, setEstadoFilter]         = useState(new Set()) // vacío = todos
   const [responsableFilter, setResponsableFilter] = useState('')
   const [gestorFilter, setGestorFilter]           = useState('')
-  const [showChart, setShowChart]                 = useState(true)
   const topScrollRef   = useRef(null)
   const tableScrollRef = useRef(null)
   const [tableWidth, setTableWidth] = useState(1600)
@@ -125,9 +119,9 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', syncTopWidth)
   }, [syncTopWidth])
   const [vistaGlobal, setVistaGlobal]             = useState(false)
-  const [soloHastaHoy, setSoloHastaHoy]           = useState(false)
-  const [mesFilter, setMesFilter]                 = useState(null) // null = todos los meses
-  const mesActual = new Date().getMonth() + 1 // 1-12
+  // Rango de meses de análisis (1-12). Por defecto: año completo.
+  const [desde, setDesde] = useState(1)
+  const [hasta, setHasta] = useState(12)
   const [clockifyGroups, setClockifyGroups]       = useState([])
 
   // Fetch Clockify groups totals
@@ -195,33 +189,29 @@ export default function Dashboard() {
   }, [vistaGlobal, proyectos, proyAnio]) // eslint-disable-line
 
   function mesCheck(x) {
-    if (mesFilter !== null) return x.mes === mesFilter
-    if (soloHastaHoy) return x.mes <= mesActual
-    return true
+    return x.mes >= desde && x.mes <= hasta
+  }
+
+  // Proveedores = Plan de Medios + Gastos de Personal
+  // Beneficio   = Facturación − Coste Personal − Proveedores
+  function computeKpis(e) {
+    const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
+    const facturacion     = sum('facturacion')
+    const coste_personal  = sum('coste_personal')
+    const gastos_personal = sum('gastos_personal')
+    const produccion      = sum('produccion')
+    const plan_medios     = sum('plan_medios')
+    const proveedores     = plan_medios + gastos_personal
+    const beneficio       = facturacion - coste_personal - proveedores
+    return { facturacion, coste_personal, gastos_personal, produccion, plan_medios, proveedores, beneficio }
   }
 
   function kpis(id) {
-    const e = entradas.filter(x => x.proyecto_id === id && mesCheck(x))
-    const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
-    const facturacion     = sum('facturacion')
-    const coste_personal  = sum('coste_personal')
-    const gastos_personal = sum('gastos_personal')
-    const produccion      = sum('produccion')
-    const plan_medios     = sum('plan_medios')
-    const beneficio       = facturacion - coste_personal - gastos_personal - produccion - plan_medios
-    return { facturacion, coste_personal, gastos_personal, produccion, plan_medios, beneficio }
+    return computeKpis(entradas.filter(x => x.proyecto_id === id && mesCheck(x)))
   }
 
   function kpisForIds(ids) {
-    const e = entradas.filter(x => ids.includes(x.proyecto_id) && mesCheck(x))
-    const sum = cat => e.filter(x => x.categoria === cat).reduce((a, b) => a + Number(b.importe), 0)
-    const facturacion     = sum('facturacion')
-    const coste_personal  = sum('coste_personal')
-    const gastos_personal = sum('gastos_personal')
-    const produccion      = sum('produccion')
-    const plan_medios     = sum('plan_medios')
-    const beneficio       = facturacion - coste_personal - gastos_personal - produccion - plan_medios
-    return { facturacion, coste_personal, gastos_personal, produccion, plan_medios, beneficio }
+    return computeKpis(entradas.filter(x => ids.includes(x.proyecto_id) && mesCheck(x)))
   }
 
   const rows = useMemo(() => {
@@ -246,7 +236,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? va.localeCompare(vb) : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy, mesFilter]) // eslint-disable-line
+  }, [proyAnio, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, desde, hasta]) // eslint-disable-line
 
   // ── Vista global: agrupa todos los años por código de proyecto ────────────────
   const rowsGlobal = useMemo(() => {
@@ -281,7 +271,7 @@ export default function Dashboard() {
         const cmp = typeof va === 'string' ? (va || '').localeCompare(vb || '') : (Number(va) || 0) - (Number(vb) || 0)
         return sort.dir === 'asc' ? cmp : -cmp
       })
-  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, soloHastaHoy, mesFilter]) // eslint-disable-line
+  }, [proyectos, entradas, search, sort, estadoFilter, responsableFilter, gestorFilter, desde, hasta]) // eslint-disable-line
 
   const activeRows = vistaGlobal ? rowsGlobal : rows
 
@@ -292,8 +282,9 @@ export default function Dashboard() {
     gastos_personal: acc.gastos_personal + r.gastos_personal,
     produccion:      acc.produccion      + r.produccion,
     plan_medios:     acc.plan_medios     + r.plan_medios,
+    proveedores:     acc.proveedores     + r.proveedores,
     beneficio:       acc.beneficio       + r.beneficio,
-  }), { presupuesto: 0, facturacion: 0, coste_personal: 0, gastos_personal: 0, produccion: 0, plan_medios: 0, beneficio: 0 })
+  }), { presupuesto: 0, facturacion: 0, coste_personal: 0, gastos_personal: 0, produccion: 0, plan_medios: 0, proveedores: 0, beneficio: 0 })
 
   function toggleSort(col) {
     setSort(s => s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' })
@@ -319,31 +310,25 @@ export default function Dashboard() {
     { label: 'Previsión anual',   value: fmt(totales.presupuesto),    color: '#7C4DFF' },
     { label: 'Facturación',       value: fmt(totales.facturacion),    sub: totales.presupuesto ? `${((totales.facturacion / totales.presupuesto) * 100).toFixed(1)}% ejecutado` : null, color: '#10B981' },
     { label: 'Coste personal',    value: fmt(totales.coste_personal), sub: totales.facturacion ? `${((totales.coste_personal / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#6366F1' },
-    { label: 'Producción',        value: fmt(totales.produccion),     sub: totales.facturacion ? `${((totales.produccion    / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
+    { label: 'Proveedores',       value: fmt(totales.proveedores),    sub: totales.facturacion ? `${((totales.proveedores   / totales.facturacion) * 100).toFixed(1)}% s/factura` : null, color: '#F59E0B' },
     { label: 'Beneficio',         value: fmt(totales.beneficio),      sub: totales.facturacion ? `${((totales.beneficio     / totales.facturacion) * 100).toFixed(1)}% ganancia`  : null, color: totales.beneficio >= 0 ? '#10B981' : '#EF4444' },
   ]
 
+  // Desglose de Proveedores: el % es sobre Proveedores, no sobre la factura
   const subPills = [
-    { label: 'Plan de Medios',     value: totales.plan_medios,     color: '#EF4444',  real: true  },
-    { label: 'Gastos Personal',    value: totales.gastos_personal, color: '#8B5CF6',  real: true  },
-    { label: 'Campañas Digitales', value: null,                    color: '#06B6D4',  real: false },
-    { label: 'Audiovisual',        value: null,                    color: '#F97316',  real: false },
+    { label: 'Plan de Medios',  value: totales.plan_medios,     color: '#EF4444' },
+    { label: 'Gastos Personal', value: totales.gastos_personal, color: '#8B5CF6' },
   ]
-
-  const chartRows = [...activeRows].sort((a, b) => b.facturacion - a.facturacion)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100%' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.4px' }}>Dashboard · {anio}{mesFilter !== null ? ` · ${['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][mesFilter-1]}` : ''}</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--c-text-1)', letterSpacing: '-0.4px' }}>Dashboard · {anio}</h1>
           <p style={{ fontSize: 13, color: 'var(--c-text-3)', marginTop: 2 }}>{rows.length} de {proyAnio.length} proyecto{proyAnio.length !== 1 ? 's' : ''}</p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <button onClick={() => setSoloHastaHoy(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: soloHastaHoy ? '#10B98118' : 'var(--c-bg-surface)', color: soloHastaHoy ? '#10B981' : 'var(--c-text-2)', border: `1.5px solid ${soloHastaHoy ? '#10B98150' : 'var(--c-border)'}`, cursor: 'pointer', boxShadow: soloHastaHoy ? '0 2px 8px rgba(16,185,129,0.2)' : 'none' }}>
-            <CalendarCheck size={14} /> A fecha de hoy
-          </button>
           <button onClick={() => setVistaGlobal(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: vistaGlobal ? '#7C4DFF18' : 'var(--c-bg-surface)', color: vistaGlobal ? '#7C4DFF' : 'var(--c-text-2)', border: `1.5px solid ${vistaGlobal ? '#7C4DFF50' : 'var(--c-border)'}`, cursor: 'pointer', boxShadow: vistaGlobal ? '0 2px 8px rgba(124,77,255,0.2)' : 'none' }}>
             <Layers size={14} /> Vista global
           </button>
@@ -351,9 +336,6 @@ export default function Dashboard() {
             style={{ padding: '7px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600, border: '1.5px solid var(--c-border)', background: vistaGlobal ? 'var(--c-bg-muted)' : 'var(--c-bg-surface)', color: vistaGlobal ? 'var(--c-text-4)' : 'var(--c-text-1)', cursor: vistaGlobal ? 'default' : 'pointer', opacity: vistaGlobal ? 0.5 : 1 }}>
             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <button onClick={() => setShowChart(v => !v)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: showChart ? '#F59E0B18' : 'var(--c-bg-surface)', color: showChart ? '#F59E0B' : 'var(--c-text-2)', border: `1.5px solid ${showChart ? '#F59E0B50' : 'var(--c-border)'}`, cursor: 'pointer' }}>
-            <BarChart2 size={14} /> Gráfico
-          </button>
           <button onClick={() => exportCSV(rows, anio)} title="Exportar CSV" style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 13px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: 'var(--c-bg-surface)', color: 'var(--c-text-2)', border: '1.5px solid var(--c-border)', cursor: 'pointer' }}>
             <Download size={14} /> CSV
           </button>
@@ -404,22 +386,17 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Sub-pills desglose producción */}
+      {/* Desglose de Proveedores (Producción): % sobre Proveedores */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Desglose</span>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)', marginRight: 2 }}>Producción</span>
         {subPills.map(p => {
-          const pct = p.real && totales.facturacion ? ((p.value / totales.facturacion) * 100).toFixed(1) : null
+          const pct = totales.proveedores ? ((p.value / totales.proveedores) * 100).toFixed(1) : null
           return (
-            <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: `1px solid ${p.real ? 'var(--c-border)' : 'var(--c-border-light)'}`, borderRadius: 20, padding: '4px 12px', opacity: p.real ? 1 : 0.5 }}>
+            <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 20, padding: '4px 12px' }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
               <span style={{ fontSize: 11.5, color: 'var(--c-text-3)', fontWeight: 500 }}>{p.label}</span>
-              {p.real
-                ? <>
-                    <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
-                    {pct && <span className="font-numeric" style={{ fontSize: 10, fontWeight: 600, color: p.color, opacity: 0.7 }}>({pct}%)</span>}
-                  </>
-                : <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontStyle: 'italic' }}>próximamente</span>
-              }
+              <span className="font-numeric" style={{ fontSize: 12, fontWeight: 700, color: p.color }}>{fmt(p.value)}</span>
+              {pct && <span className="font-numeric" style={{ fontSize: 10, fontWeight: 600, color: p.color, opacity: 0.7 }}>({pct}%)</span>}
             </div>
           )
         })}
@@ -443,78 +420,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Overview chart — horizontal bars, two columns */}
-      {showChart && chartRows.length > 0 && (() => {
-        const chartDataAll = chartRows.map(r => ({
-          name: r.nombre_contrato.length > 22 ? r.nombre_contrato.slice(0, 20) + '…' : r.nombre_contrato,
-          fullName: r.nombre_contrato,
-          facturacion: r.facturacion,
-          beneficio: r.beneficio,
-        }))
-        const mid = Math.ceil(chartDataAll.length / 2)
-        const col1 = chartDataAll.slice(0, mid)
-        const col2 = chartDataAll.slice(mid)
-        const rowH = 36
-        const chartH = (h) => Math.max(180, h.length * rowH + 40)
-
-        const renderChart = (data) => (
-          <ResponsiveContainer width="100%" height={chartH(data)}>
-            <BarChart
-              data={data} layout="vertical"
-              barCategoryGap="20%" barGap={2}
-              margin={{ top: 4, right: 12, left: 4, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border)" horizontal={false} />
-              <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 10, fill: 'var(--c-text-2)', fontFamily: 'Poppins' }} axisLine={false} tickLine={false} />
-              <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--c-text-3)', fontFamily: 'Space Grotesk' }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
-              <Tooltip
-                formatter={(v, label) => [
-                  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v),
-                  label,
-                ]}
-                labelFormatter={(label) => { const d = data.find(x => x.name === label); return d?.fullName || label }}
-                labelStyle={{ fontWeight: 700, color: '#fff', marginBottom: 4 }}
-                itemStyle={{ color: '#fff' }}
-                contentStyle={{ borderRadius: 10, border: 'none', fontSize: 12, fontFamily: 'Poppins, sans-serif', background: '#3B82F6', color: '#fff', boxShadow: '0 4px 16px rgba(59,130,246,0.35)' }}
-              />
-              <ReferenceLine x={0} stroke="var(--c-border)" />
-              <Bar dataKey="facturacion" name="Facturación" fill="#10B981" radius={[0,3,3,0]} maxBarSize={16} />
-              <Bar dataKey="beneficio" name="Beneficio" radius={[0,3,3,0]} maxBarSize={16}>
-                {data.map((r, i) => <Cell key={i} fill={r.beneficio >= 0 ? '#06B6D4' : '#EF4444'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )
-
-        return (
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
-              <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--c-text-1)' }}>Rentabilidad por proyecto</p>
-              <p style={{ fontSize: 11, color: 'var(--c-text-3)' }}>Facturación y beneficio · {chartRows.length} proyectos · {vistaGlobal ? 'global' : anio}</p>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: col2.length > 0 ? '1fr 1fr' : '1fr', gap: 14 }}>
-              <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '16px 12px' }}>
-                {renderChart(col1)}
-              </div>
-              {col2.length > 0 && (
-                <div style={{ background: 'var(--c-bg-surface)', border: '1px solid var(--c-border)', borderRadius: 14, padding: '16px 12px' }}>
-                  {renderChart(col2)}
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* Month timeline */}
-      <MonthTimeline
-        anio={anio}
-        entradas={entradas}
-        proyIds={(vistaGlobal ? proyectos : proyAnio).map(p => p.id)}
-        mesFilter={mesFilter}
-        mesActual={mesActual}
-        onChange={setMesFilter}
-      />
+      {/* Rango de meses de análisis */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)' }}>Rango</span>
+        <RangoMeses desde={desde} hasta={hasta} onChange={(d, h) => { setDesde(d); setHasta(h) }} />
+      </div>
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -679,97 +589,3 @@ export default function Dashboard() {
   )
 }
 
-// ── MonthTimeline ─────────────────────────────────────────────────────────────
-
-const MESES_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
-const MESES_SHORT_TL = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
-
-function MonthTimeline({ anio, entradas, proyIds, mesFilter, mesActual, onChange }) {
-  const byMonth = useMemo(() => {
-    const result = Array(12).fill(0)
-    for (const e of entradas) {
-      if (e.categoria === 'facturacion' && e.anio === anio && proyIds.includes(e.proyecto_id)) {
-        result[e.mes - 1] += Number(e.importe) || 0
-      }
-    }
-    return result
-  }, [entradas, anio, proyIds])
-
-  const maxVal = Math.max(...byMonth, 1)
-
-  return (
-    <div style={{
-      background: 'var(--c-bg-surface)',
-      border: '1px solid var(--c-border)',
-      borderRadius: 14,
-      padding: '16px 20px',
-      marginBottom: 20,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-3)' }}>
-            {mesFilter !== null ? `${MESES_FULL[mesFilter - 1]} ${anio}` : `Todos los meses · ${anio}`}
-          </span>
-          {mesFilter !== null && (
-            <button onClick={() => onChange(null)} style={{
-              display: 'flex', alignItems: 'center', gap: 3,
-              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-              background: '#6366F115', color: '#6366F1', border: '1px solid #6366F130',
-              cursor: 'pointer',
-            }}>✕ Ver todos</button>
-          )}
-        </div>
-        <span style={{ fontSize: 10, color: 'var(--c-text-4)', fontWeight: 500 }}>Facturación relativa por mes</span>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: 6 }}>
-        {MESES_SHORT_TL.map((m, i) => {
-          const mes = i + 1
-          const isActive = mesFilter === mes
-          const isCurrent = mes === mesActual
-          const isPast = mes < mesActual
-          const hasData = byMonth[i] > 0
-          const barH = Math.max(4, Math.round((byMonth[i] / maxVal) * 36))
-
-          return (
-            <button
-              key={m}
-              onClick={() => onChange(isActive ? null : mes)}
-              title={`${MESES_FULL[i]} · ${hasData ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(byMonth[i]) : 'Sin datos'}`}
-              style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                padding: '8px 4px 6px',
-                borderRadius: 10,
-                border: `1.5px solid ${isActive ? '#6366F1' : isCurrent ? '#6366F140' : 'transparent'}`,
-                background: isActive ? '#6366F1' : isCurrent ? '#6366F108' : 'transparent',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                outline: 'none',
-                position: 'relative',
-              }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = '#6366F10C'; e.currentTarget.style.borderColor = '#6366F140' }}}
-              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = isCurrent ? '#6366F108' : 'transparent'; e.currentTarget.style.borderColor = isCurrent ? '#6366F140' : 'transparent' }}}
-            >
-              <div style={{ width: '100%', height: 36, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                <div style={{
-                  width: '55%', height: hasData ? barH : 3, borderRadius: 3,
-                  background: isActive ? 'rgba(255,255,255,0.65)'
-                    : hasData ? (isPast || isCurrent ? '#6366F1' : '#6366F145')
-                    : 'var(--c-border)',
-                  transition: 'height 0.3s ease',
-                }} />
-              </div>
-              <span style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
-                color: isActive ? '#fff' : isCurrent ? '#6366F1' : hasData ? 'var(--c-text-2)' : 'var(--c-text-4)',
-              }}>{m}</span>
-              {isCurrent && !isActive && (
-                <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#6366F1', position: 'absolute', bottom: 3 }} />
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
