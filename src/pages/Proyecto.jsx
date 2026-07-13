@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Save, Edit2, Check, X, Trash2, RefreshCw } from 'lucide-react'
+import { startOfYear, endOfYear } from 'date-fns'
 import { useAuth } from '../context/AuthContext'
-import RangoMeses from '../components/RangoMeses'
+import DateRangePicker from '../components/DateRangePicker'
+import { monthsInYear } from '../lib/dateRange'
 
 const MYTRACK_API = 'https://mytrack.xul.es/api/team-costs'
 import { useData } from '../context/DataContext'
@@ -49,9 +51,12 @@ export default function Proyecto() {
   const [grid, setGrid]           = useState(initGrid)
   const [dirty, setDirty]         = useState(false)
   const [saving, setSaving]       = useState(false)
-  // Rango de meses de análisis (1-12). Por defecto: año completo.
-  const [desde, setDesde]         = useState(1)
-  const [hasta, setHasta]         = useState(12)
+  // Rango de fechas de análisis. Por defecto: año del proyecto completo.
+  const anioBase = proyecto?.anio || new Date().getFullYear()
+  const [rangeFrom, setRangeFrom] = useState(() => startOfYear(new Date(anioBase, 0, 1)))
+  const [rangeTo, setRangeTo]     = useState(() => endOfYear(new Date(anioBase, 0, 1)))
+  // ECOFIN es mensual: el rango de fechas se traduce a qué meses toca dentro del año del proyecto
+  const { desde, hasta } = monthsInYear(rangeFrom, rangeTo, proyecto?.anio || anioBase)
   const [editHeader, setEditHeader] = useState(false)
   const [headerForm, setHeaderForm] = useState(proyecto ? { ...proyecto } : {})
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -135,6 +140,8 @@ export default function Proyecto() {
     setEditHeader(false)
     setHeaderForm({ ...proyecto })
     setConfirmDelete(false)
+    setRangeFrom(startOfYear(new Date(proyecto.anio, 0, 1)))
+    setRangeTo(endOfYear(new Date(proyecto.anio, 0, 1)))
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-sync grid when Supabase entradas load/change (but not if user has unsaved edits)
@@ -413,10 +420,10 @@ export default function Proyecto() {
             {dirty && <span style={{ fontSize: 12, fontWeight: 600, color: '#F59E0B' }}>● Sin guardar</span>}
           </div>
         </div>
-        {/* Rango de meses de análisis */}
+        {/* Rango de fechas de análisis */}
         <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--c-border)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)' }}>Rango de análisis</span>
-          <RangoMeses desde={desde} hasta={hasta} onChange={(d, h) => { setDesde(d); setHasta(h) }} size="sm" />
+          <DateRangePicker from={rangeFrom} to={rangeTo} onChange={({ from, to }) => { setRangeFrom(from); setRangeTo(to) }} />
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>

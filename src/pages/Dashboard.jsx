@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ChevronUp, ChevronDown, Plus, AlertCircle, Download, Upload, Layers, Save } from 'lucide-react'
+import { startOfYear, endOfYear } from 'date-fns'
 import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
-import RangoMeses from '../components/RangoMeses'
+import DateRangePicker from '../components/DateRangePicker'
+import { dominantYear, monthsInYear } from '../lib/dateRange'
 import { getProjects, getSummaryByProject, getUserGroups } from '../lib/mytrack'
 
 const ESTADO_BADGE = {
@@ -119,9 +121,17 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', syncTopWidth)
   }, [syncTopWidth])
   const [vistaGlobal, setVistaGlobal]             = useState(false)
-  // Rango de meses de análisis (1-12). Por defecto: año completo.
-  const [desde, setDesde] = useState(1)
-  const [hasta, setHasta] = useState(12)
+  // Rango de fechas de análisis. Por defecto: año en curso completo.
+  const [rangeFrom, setRangeFrom] = useState(() => startOfYear(new Date(CURRENT_YEAR, 0, 1)))
+  const [rangeTo, setRangeTo]     = useState(() => endOfYear(new Date(CURRENT_YEAR, 0, 1)))
+  // ECOFIN es mensual: el rango de fechas se traduce a qué meses toca dentro del año seleccionado
+  const { desde, hasta } = monthsInYear(rangeFrom, rangeTo, anio)
+
+  function handleRangeChange({ from, to }) {
+    setRangeFrom(from); setRangeTo(to)
+    const y = dominantYear(from, to)
+    if (y !== anio && !vistaGlobal) setAnio(y)
+  }
   const [clockifyGroups, setClockifyGroups]       = useState([])
 
   // Fetch Clockify groups totals
@@ -420,10 +430,10 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Rango de meses de análisis */}
+      {/* Rango de fechas de análisis */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--c-text-4)' }}>Rango</span>
-        <RangoMeses desde={desde} hasta={hasta} onChange={(d, h) => { setDesde(d); setHasta(h) }} />
+        <DateRangePicker from={rangeFrom} to={rangeTo} onChange={handleRangeChange} />
       </div>
 
       {/* Filters */}
