@@ -47,10 +47,15 @@ export default async function handler(req, res) {
     const t = process.env.APPCENTER_SSO_TOKEN || ''
     const k = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     const u = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+    const keys = Object.keys(process.env)
+      .filter(x => /sso|appcenter|supabase|service|vite/i.test(x))
+      .sort()
     return res.status(200).json({
-      appcenter_token: { present: !!t, len: t.length, empieza: t.slice(0, 6), termina: t.slice(-6) },
-      service_key:     { present: !!k, len: k.length, empieza: k.slice(0, 8) },
-      supabase_url:    { present: !!u, valor: u },
+      appcenter_token: { present: !!t, len: t.length },
+      service_key:     { present: !!k, len: k.length },
+      supabase_url:    { present: !!u },
+      // nombres de variables detectadas (sin valores) para localizar typos
+      variables_detectadas: keys,
     })
   }
   if (req.method !== 'POST') {
