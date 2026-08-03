@@ -41,6 +41,18 @@ function admin() {
 }
 
 export default async function handler(req, res) {
+  // Diagnóstico temporal (no expone secretos: solo presencia y longitud).
+  // Se retira tras confirmar la configuración.
+  if (req.method === 'GET') {
+    const t = process.env.APPCENTER_SSO_TOKEN || ''
+    const k = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    const u = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
+    return res.status(200).json({
+      appcenter_token: { present: !!t, len: t.length, empieza: t.slice(0, 6), termina: t.slice(-6) },
+      service_key:     { present: !!k, len: k.length, empieza: k.slice(0, 8) },
+      supabase_url:    { present: !!u, valor: u },
+    })
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
