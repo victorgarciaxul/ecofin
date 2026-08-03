@@ -18,7 +18,7 @@ function initFromStorage(key, fallback) {
 
 export function DataProvider({ children }) {
   const isDemo = !isSupabaseConfigured
-  const { isReadOnly } = useAuth()
+  const { isReadOnly, user, loading: authLoading } = useAuth()
 
   const [proyectos, setProyectos] = useState(() =>
     initFromStorage('ecofin_proyectos', DEMO_PROYECTOS)
@@ -37,10 +37,16 @@ export function DataProvider({ children }) {
     if (isDemo) localStorage.setItem('ecofin_entradas', JSON.stringify(entradas))
   }, [entradas, isDemo])
 
-  // Load from Supabase when configured
+  // Cargar desde Supabase SOLO cuando hay sesión establecida.
+  // Antes cargaba en el montaje sin esperar a la sesión; con RLS activo esa
+  // carga iría como rol anónimo y sería rechazada. Ahora espera a que la
+  // autenticación termine y haya un usuario con sesión real.
   useEffect(() => {
-    if (!isDemo) loadFromSupabase()
-  }, [isDemo])
+    if (isDemo) return
+    if (authLoading) return          // aún resolviendo la sesión
+    if (user) loadFromSupabase()     // sesión lista → cargar como authenticated
+    else setLoading(false)           // sin sesión (pantalla de login): no cargar
+  }, [isDemo, authLoading, user])
 
   // Supabase limita cada consulta a 1000 filas — paginar siempre,
   // si no, las filas por encima del límite nunca llegan al cliente

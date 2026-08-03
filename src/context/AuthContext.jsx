@@ -20,31 +20,73 @@ export function AuthProvider({ children }) {
   const isDemo = !isSupabaseConfigured
 
   useEffect(() => {
-    // SSO: siempre comprobar primero, independientemente del modo Supabase
+    let mounted = true
     const params   = new URLSearchParams(window.location.search)
+    const ssoToken = params.get('sso_token')
     const ssoEmail = params.get('sso_email')
-    if (ssoEmail) {
-      if (SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
+
+    // ── Modo demo (sin Supabase): SSO por email, como antes ──
+    if (isDemo) {
+      if (ssoEmail && SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
         sessionStorage.setItem('demo_auth', '1')
         window.history.replaceState({}, '', window.location.pathname)
         setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() })
-        setLoading(false)
-        return
+      } else {
+        const ok = sessionStorage.getItem('demo_auth')
+        setUser(ok ? DEMO_USER : null)
       }
-    }
-
-    if (isDemo) {
-      const ok = sessionStorage.getItem('demo_auth')
-      setUser(ok ? DEMO_USER : null)
       setLoading(false)
       return
     }
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null))
-    return () => subscription.unsubscribe()
+
+    // ── Modo Supabase: sesión REAL ──
+    const { data: { subscription } } =
+      supabase.auth.onAuthStateChange((_e, session) => {
+        if (mounted) setUser(session?.user ?? null)
+      })
+
+    async function bootstrap() {
+      // Si venimos de AppCenter con un token de un solo uso, canjearlo por
+      // una sesión real de Supabase. La verificación del token y el permiso
+      // de acceso los hace el endpoint /api/sso-login en el servidor.
+      if (ssoToken) {
+        let sessionOk = false
+        try {
+          const res = await fetch('/api/sso-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sso_token: ssoToken }),
+          })
+          if (res.ok) {
+            const { access_token, refresh_token } = await res.json()
+            const { error } = await supabase.auth.setSession({ access_token, refresh_token })
+            sessionOk = !error
+          }
+        } catch (_) { /* red de seguridad abajo */ }
+        window.history.replaceState({}, '', window.location.pathname)
+
+        if (sessionOk) {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (mounted) { setUser(session?.user ?? null); setLoading(false) }
+          return
+        }
+
+        // RED DE SEGURIDAD: si el canje de sesión falla, NO dejamos al usuario
+        // fuera. Degradamos al comportamiento actual (entrar por email, sin
+        // sesión real, operando como hoy). IMPORTANTE: mientras algún usuario
+        // entre por esta vía, NO debe activarse RLS (paso 4) — se rompería.
+        if (ssoEmail && SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
+          if (mounted) { setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() }); setLoading(false) }
+          return
+        }
+      }
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (mounted) { setUser(session?.user ?? null); setLoading(false) }
+    }
+    bootstrap()
+
+    return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
   async function signIn(email, password) {
