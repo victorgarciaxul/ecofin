@@ -71,18 +71,28 @@ export function AuthProvider({ children }) {
           return
         }
 
-        // RED DE SEGURIDAD: si el canje de sesión falla, NO dejamos al usuario
-        // fuera. Degradamos al comportamiento actual (entrar por email, sin
-        // sesión real, operando como hoy). IMPORTANTE: mientras algún usuario
-        // entre por esta vía, NO debe activarse RLS (paso 4) — se rompería.
-        if (ssoEmail && SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
-          if (mounted) { setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() }); setLoading(false) }
-          return
-        }
       }
 
+      // ¿Sesión real ya persistida (de un canje anterior)?
       const { data: { session } } = await supabase.auth.getSession()
-      if (mounted) { setUser(session?.user ?? null); setLoading(false) }
+      if (session) {
+        if (mounted) { setUser(session.user); setLoading(false) }
+        return
+      }
+
+      // RED DE SEGURIDAD / compatibilidad: sin sesión real, pero venimos de
+      // AppCenter con un email permitido (p.ej. el return_to que solo manda
+      // sso_email sin token). Degradamos al comportamiento actual (entrar por
+      // email) para NO quedar en bucle de redirección con App.jsx.
+      // IMPORTANTE: mientras alguien entre por esta vía opera como anon, así
+      // que NO debe activarse RLS (paso 4) hasta que todos tengan sesión real.
+      if (ssoEmail && SSO_ALLOWED.includes(ssoEmail.toLowerCase())) {
+        window.history.replaceState({}, '', window.location.pathname)
+        if (mounted) { setUser({ ...DEMO_USER, email: ssoEmail.toLowerCase() }); setLoading(false) }
+        return
+      }
+
+      if (mounted) { setUser(null); setLoading(false) }
     }
     bootstrap()
 
