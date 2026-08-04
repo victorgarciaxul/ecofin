@@ -12,8 +12,8 @@
  *
  * Variables de entorno necesarias en Vercel (proyecto ecofin):
  *   - VITE_SUPABASE_URL            (ya existe)
- *   - SUPABASE_SERVICE_ROLE_KEY    (NUEVA: clave secreta sb_secret_... del proyecto EcoFin)
- *   - APPCENTER_SSO_TOKEN          (NUEVA: clave anon del proyecto AppCenter, para /sso/verify)
+ *   - SUPABASE_SERVICE_ROLE_KEY    (clave secreta sb_secret_... del proyecto EcoFin)
+ * La clave anon de AppCenter va hardcodeada más abajo (es pública, no secreta).
  */
 import { createClient } from '@supabase/supabase-js'
 
@@ -29,6 +29,12 @@ const SSO_ALLOWED = [
 
 const APPCENTER_VERIFY = 'https://qwlebsymypgauydkqxem.supabase.co/functions/v1/sso/verify'
 
+// Clave anon (PÚBLICA) del proyecto AppCenter. NO es un secreto: ya va
+// incrustada en el HTML de appcenter.xul.es que se sirve a cualquier navegador.
+// Solo autoriza la llamada server-to-server a /sso/verify. Hardcodeada a
+// propósito para no depender de una variable de entorno frágil.
+const APPCENTER_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF3bGVic3lteXBnYXV5ZGtxeGVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1Njk4ODUsImV4cCI6MjA5NjE0NTg4NX0.tidfgCi6czlYBOAtuLD20Ouxomk_jeMG2FhsjuGmVzo'
+
 let _admin = null
 function admin() {
   if (!_admin) {
@@ -41,23 +47,6 @@ function admin() {
 }
 
 export default async function handler(req, res) {
-  // Diagnóstico temporal (no expone secretos: solo presencia y longitud).
-  // Se retira tras confirmar la configuración.
-  if (req.method === 'GET') {
-    const t = process.env.APPCENTER_SSO_TOKEN || ''
-    const k = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    const u = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''
-    const keys = Object.keys(process.env)
-      .filter(x => /sso|appcenter|supabase|service|vite/i.test(x))
-      .sort()
-    return res.status(200).json({
-      appcenter_token: { present: !!t, len: t.length },
-      service_key:     { present: !!k, len: k.length },
-      supabase_url:    { present: !!u },
-      // nombres de variables detectadas (sin valores) para localizar typos
-      variables_detectadas: keys,
-    })
-  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
@@ -72,7 +61,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.APPCENTER_SSO_TOKEN}`,
+        'Authorization': `Bearer ${APPCENTER_ANON_KEY}`,
       },
       body: JSON.stringify({ sso_token }),
       signal: AbortSignal.timeout(10000),
