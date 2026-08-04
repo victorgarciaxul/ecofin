@@ -8,7 +8,7 @@ import { monthsInYear } from '../lib/dateRange'
 
 const MYTRACK_API = 'https://mytrack.xul.es/api/team-costs'
 import { useData } from '../context/DataContext'
-import { getProjects, getSummaryByProject, getUserGroups } from '../lib/clockify'
+import { getProjects, getSummaryByProject, getUserGroups } from '../lib/mytrack'
 
 const MESES     = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']
 
@@ -518,8 +518,8 @@ function ClockifyGroups({ codigoProyecto, nombreContrato, anio }) {
   const [debug, setDebug]         = useState('')
 
   useEffect(() => {
-    const wsId = localStorage.getItem('clockify_ws')
-    if (!wsId) { setLoading(false); setDebug('No clockify_ws en localStorage'); return }
+    // Workspace de MyTrack (mismo que usa "Análisis de trabajo"); por defecto XUL.
+    const wsId = localStorage.getItem('mytrack_ws') || 'xul-ws-1'
     fetchGroups(wsId)
   }, [codigoProyecto, nombreContrato, anio]) // eslint-disable-line
 
